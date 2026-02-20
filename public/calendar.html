@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>カレンダー</title>
+  <link rel="stylesheet" href="/css/calendar.css" />
+</head>
+<body>
+
+  <div class="cal-topbar">
+    <h1 class="cal-title">カレンダー</h1>
+
+    <div class="cal-controls">
+      <button class="cal-mode-btn" data-mode="day"   id="modeDay">日</button>
+      <button class="cal-mode-btn" data-mode="week"  id="modeWeek">週</button>
+      <button class="cal-mode-btn" data-mode="2week" id="mode2Week">2週</button>
+      <button class="cal-mode-btn" data-mode="month" id="modeMonth">月</button>
+
+      <input type="date" class="cal-date" id="datePicker" />
+    </div>
+
+    <div class="cal-nav-row">
+      <button class="cal-nav-btn" id="prevBtn">戻る</button>
+
+      <div class="cal-nav-mid">
+        <button class="cal-nav-btn" id="newBtn">新規作成</button>
+        <p class="cal-error cal-error--center" id="errorText"></p>
+      </div>
+
+      <button class="cal-nav-btn" id="nextBtn">進む</button>
+    </div>
+  </div>
+
+  <div id="gridRoot">
+    <div class="cal-grid-shell">
+      <div class="cal-corner"></div>
+
+      <div class="cal-days-header" id="daysHeader"></div>
+
+      <div class="cal-time-col" id="timeCol"></div>
+
+      <div class="cal-days-body" id="daysBody">
+        <div class="cal-days-grid" id="daysGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/calendar.js"></script>
+</body>
+</html>

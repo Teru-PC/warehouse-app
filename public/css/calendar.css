@@ -1,0 +1,262 @@
+/* calendar.js（cal-*）に合わせたCSS */
+
+/* 30分1マスの高さ：JSが --cell-h を読む */
+:root {
+  --cell-h: 28px;
+}
+
+/* カレンダー枠 */
+#gridRoot {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* ===== 上部（タイトル + モード/日付） ===== */
+.cal-topbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cal-title {
+  font-size: 18px;
+  margin: 0;
+}
+
+/* モードボタン＋日付入力：中央寄せ */
+.cal-controls {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* モードボタン：選択中だけ青、他は文字のみ */
+.cal-mode-btn {
+  border: 0;
+  background: transparent;
+  color: #111827;
+  font-weight: 600;
+
+  /* 2割程度大きく */
+  font-size: 17px;
+  padding: 10px 10px;
+  border-radius: 12px;
+
+  cursor: pointer;
+}
+
+.cal-mode-btn.is-active {
+  background: #2563eb;
+  color: #fff;
+
+  font-size: 17px;
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+.cal-date {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+/* 旧rangeTextは使わないが、残っても崩れないように */
+.cal-range {
+  display: none;
+}
+
+/* ===== ナビ行（戻る / 新規作成 / 進む） ===== */
+/* 3分割グリッドにして「新規作成」を完全中央固定 */
+.cal-nav-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  margin: 6px 0 10px;
+  gap: 12px;
+}
+
+/* 戻る：左寄せ */
+#prevBtn {
+  justify-self: start;
+}
+
+/* 進む：右寄せ */
+#nextBtn {
+  justify-self: end;
+}
+
+/* 中央：新規作成 + エラー */
+.cal-nav-mid {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ボタン（戻る/進む/新規作成で共通） */
+.cal-nav-btn {
+  width: 180px;       /* 横幅3倍程度 */
+  max-width: 45vw;    /* 画面が狭い時の保険 */
+  padding: 12px 14px;
+
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  border-radius: 10px;
+  cursor: pointer;
+
+  /* 戻る/進む：太字＋少し大きく */
+  font-weight: 700;
+  font-size: 19px;
+}
+
+.cal-nav-btn:hover {
+  filter: brightness(0.98);
+}
+
+/* エラー表示（中央の細い領域） */
+.cal-error {
+  color: #b91c1c;
+  min-height: 18px;
+  margin: 0;
+}
+
+.cal-error--center {
+  text-align: center;
+}
+
+/* ===== グリッド全体 ===== */
+.cal-grid-shell {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  grid-template-rows: auto 1fr;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* 左上の空き */
+.cal-corner {
+  grid-column: 1;
+  grid-row: 1;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 6;
+}
+
+/* 日付ヘッダー（横スクロールに追従） */
+.cal-days-header {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(160px, 1fr);
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.cal-day-head {
+  padding: 10px 8px;
+  border-left: 1px solid #e5e7eb;
+
+  font-family: inherit;
+  font-size: 14.4px;   /* 12px の2割増 */
+  font-weight: 700;    /* 太字 */
+
+  color: #111827;
+  white-space: nowrap;
+}
+
+/* 日付ヘッダー：土日色 */
+.cal-day-head.is-sat { background: #eaf3ff; }
+.cal-day-head.is-sun { background: #ffecec; }
+
+/* 時刻列（縦スクロールに追従） */
+.cal-time-col {
+  grid-column: 1;
+  grid-row: 2;
+  border-right: 1px solid #e5e7eb;
+  background: #fff;
+  overflow: hidden;
+}
+
+.cal-time-slot {
+  height: var(--cell-h);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  font-size: 12px;
+  color: #6b7280;
+  border-bottom: 1px solid #f1f5f9;
+  box-sizing: border-box;
+}
+
+/* 本体（スクロール領域） */
+.cal-days-body {
+  grid-column: 2;
+  grid-row: 2;
+  overflow: auto;
+  max-height: calc(var(--cell-h) * 48 + 2px);
+}
+
+.cal-days-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(160px, 1fr);
+  position: relative;
+}
+
+/* 日ごとの列 */
+.cal-day-col {
+  position: relative;
+  border-left: 1px solid #e5e7eb;
+  min-height: calc(var(--cell-h) * 48);
+}
+
+/* 時間軸（土日を非常に薄く） */
+.cal-day-col.is-sat { background: #f6fbff; }
+.cal-day-col.is-sun { background: #fff7f7; }
+
+.cal-slot-line {
+  height: var(--cell-h);
+  border-bottom: 1px solid #f1f5f9;
+  box-sizing: border-box;
+}
+
+.cal-slot-line.hour {
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+/* 案件ブロック */
+.cal-project {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  border-radius: 10px;
+  padding: 6px 8px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.cal-project.draft { background: #2563eb; }
+.cal-project.confirmed { background: #16a34a; }
+.cal-project.cancelled { background: #dc2626; }

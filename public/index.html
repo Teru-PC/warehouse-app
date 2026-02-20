@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ログイン</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>ログイン</h1>
+
+    <form id="loginForm">
+      <label>
+        メール
+        <input id="email" type="email" autocomplete="email" required />
+      </label>
+
+      <button type="submit">ログイン</button>
+    </form>
+
+    <p id="msg" style="margin-top:12px;"></p>
+  </main>
+
+  <script>
+    (function () {
+      const form = document.getElementById("loginForm");
+      const msg = document.getElementById("msg");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        msg.textContent = "";
+
+        const email = document.getElementById("email").value.trim();
+
+        if (!email) {
+          msg.textContent = "email required";
+          return;
+        }
+
+        try {
+          const res = await fetch("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            msg.textContent = data.error || "ログイン失敗";
+            return;
+          }
+
+          if (!data.token) {
+            msg.textContent = "token が返ってきませんでした";
+            return;
+          }
+
+          localStorage.setItem("token", data.token);
+          window.location.assign("/calendar.html?mode=week");
+        } catch (err) {
+          msg.textContent = "通信エラー";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
