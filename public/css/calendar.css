@@ -260,3 +260,106 @@
 .cal-project.draft { background: #2563eb; }
 .cal-project.confirmed { background: #16a34a; }
 .cal-project.cancelled { background: #dc2626; }
+
+/* 不足案件（カレンダー上で赤表示） */
+.cal-project.cal-project--shortage {
+  outline: 3px solid #dc2626;     /* 赤枠 */
+  outline-offset: 0;
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.08),
+    0 0 0 2px rgba(255,255,255,0.9) inset; /* 赤地でも判別しやすくする */
+}
+
+/* ===== 案件クリック モーダル ===== */
+.cal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.cal-modal-overlay.is-open {
+  display: flex;
+}
+
+.cal-modal {
+  width: min(520px, 96vw);
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+
+.cal-modal-title {
+  font-weight: 800;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.cal-modal-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cal-modal-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.cal-modal-btn--primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.cal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+.cal-modal-overlay.is-open { display: flex; }
+.cal-modal {
+  width: min(520px, 96vw);
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.cal-modal-title { font-weight: 800; font-size: 16px; margin-bottom: 12px; }
+.cal-modal-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.cal-modal-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.cal-modal-btn--primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* 不足：赤枠を太く（グリッドからはみ出さないよう内側に描く） */
+.cal-project.cal-project--shortage {
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.08),
+    0 0 0 4px #dc2626 inset;  /* ← 太さ：8px（もっと太くしたいなら 10px など） */
+}
+
+.cal-project.cal-project--shortage {
+  padding: 6px 8px; /* 必要なら 8px 10px に増やす */
+}

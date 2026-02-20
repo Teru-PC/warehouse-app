@@ -66,8 +66,6 @@ function startOfMonth(d) {
 }
 
 function parseIsoZ(s) {
-  // 例: "2026-02-20T01:00:00.000Z"
-  // new Date() でそのまま扱う（手動補正しない）
   const dt = new Date(s);
   if (isNaN(dt.getTime())) return null;
   return dt;
@@ -115,7 +113,6 @@ function computeRange(anchor, mode) {
     const s = startOfWeek(anchor);
     return { start: s, days: 14 };
   }
-  // month: 日付は「その月の1日から、最大31日」表示（簡易）
   const s = startOfMonth(anchor);
   const y = s.getFullYear();
   const m = s.getMonth();
@@ -167,7 +164,6 @@ function buildGridShell(rangeStart, days) {
     if (dow === 0) col.classList.add("is-sun");
     col.dataset.date = date.toISOString().slice(0, 10);
 
-    // 背景のスロット線
     for (let i = 0; i < 48; i++) {
       const line = document.createElement("div");
       line.className = "cal-slot-line";
@@ -184,18 +180,214 @@ function minutesFromDayStart(dt, dayStart) {
   return Math.round((dt - dayStart) / 60000);
 }
 
-function renderProjects(projects, rangeStart, days) {
+/* ========= 不足判定（カレンダー表示用） ========= */
+
+function normalizeShortagesPayload(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.shortages)) return data.shortages;
+  if (data && Array.isArray(data.items)) return data.items;
+  if (data && Array.isArray(data.data)) return data.data;
+  return [];
+}
+
+function hasShortageFromList(list) {
+  for (const it of list) {
+    const v = Number(it && it.shortage);
+    if (Number.isFinite(v) && v > 0) return true;
+  }
+  return false;
+}
+
+const shortagePromiseCache = new Map();
+
+function fetchProjectShortageFlag(projectId) {
+  const id = String(projectId);
+  if (shortagePromiseCache.has(id)) return shortagePromiseCache.get(id);
+
+  const p = (async () => {
+    try {
+      const data = await apiJson(`/api/shortages?project_id=${encodeURIComponent(id)}`);
+      const list = normalizeShortagesPayload(data);
+      return hasShortageFromList(list);
+    } catch {
+      return false;
+    }
+  })();
+
+  shortagePromiseCache.set(id, p);
+  return p;
+}
+
+function computeVisibleProjects(projects, rangeStart, days) {
+  const cols = Array.from(document.querySelectorAll(".cal-day-col"));
+  const rangeEnd = addDays(rangeStart, days);
+  const visible = [];
+
+  for (const p of projects) {
+    const sRaw = p.usage_start_at ?? p.usage_start;
+    const eRaw = p.usage_end_at ?? p.usage_end;
+    const s = parseIsoZ(sRaw);
+    const e = parseIsoZ(eRaw);
+    if (!s || !e) continue;
+
+    if (e <= rangeStart || s >= rangeEnd) continue;
+
+    const dayKey = startOfDay(s).toISOString().slice(0, 10);
+    const col = cols.find(c => c.dataset.date === dayKey);
+    if (!col) continue;
+
+    visible.push(p);
+  }
+
+  return visible;
+}
+
+async function computeShortageIdSetForVisibleProjects(projects, rangeStart, days) {
+  const visible = computeVisibleProjects(projects, rangeStart, days);
+  const ids = Array.from(new Set(visible.map(p => p.id).filter(v => v !== null && v !== undefined)));
+
+  const shortageFlags = await Promise.all(ids.map(id => fetchProjectShortageFlag(id)));
+
+  const set = new Set();
+  for (let i = 0; i < ids.length; i++) {
+    if (shortageFlags[i]) set.add(String(ids[i]));
+  }
+  return set;
+}
+
+/* ========= 案件クリック用モーダル ========= */
+
+function ensureProjectModal() {
+  let overlay = document.getElementById("projectModalOverlay");
+  if (overlay) return overlay;
+
+  overlay = document.createElement("div");
+  overlay.id = "projectModalOverlay";
+  overlay.className = "cal-modal-overlay";
+  overlay.innerHTML = `
+    <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle">
+      <div class="cal-modal-title" id="calModalTitle">案件</div>
+      <div class="cal-modal-actions">
+        <button type="button" class="cal-modal-btn" id="calModalEditBtn">編集へ</button>
+        <button type="button" class="cal-modal-btn cal-modal-btn--primary" id="calModalItemsBtn">機材割当へ</button>
+      </div>
+      <div class="cal-modal-actions" style="justify-content:flex-end; margin-top:10px;">
+        <button type="button" class="cal-modal-btn" id="calModalCloseBtn">閉じる</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.classList.remove("is-open");
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") overlay.classList.remove("is-open");
+  });
+
+  return overlay;
+}
+
+function openProjectModal(projectId, title, returnUrl) {
+  const overlay = ensureProjectModal();
+  const t = overlay.querySelector("#calModalTitle");
+  const editBtn = overlay.querySelector("#calModalEditBtn");
+  const itemsBtn = overlay.querySelector("#calModalItemsBtn");
+  const closeBtn = overlay.querySelector("#calModalCloseBtn");
+
+  t.textContent = title ? `案件：${title}` : "案件";
+
+  editBtn.onclick = () => {
+    location.href = `/project-edit.html?project_id=${encodeURIComponent(projectId)}&return=${encodeURIComponent(returnUrl)}`;
+  };
+
+  itemsBtn.onclick = () => {
+    location.href = `/project-items.html?project_id=${encodeURIComponent(projectId)}&return=${encodeURIComponent(returnUrl)}`;
+  };
+
+  closeBtn.onclick = () => overlay.classList.remove("is-open");
+
+  overlay.classList.add("is-open");
+}
+
+/* ========= 重なりレイアウト（同日内で横並び） ========= */
+
+function layoutOverlaps(dayEvents) {
+  // dayEvents: [{ id, startMin, endMin, p, ... }]
+  // 返す: 同じ配列に colIndex / colCount を付与
+  const evs = [...dayEvents].sort((a, b) => (a.startMin - b.startMin) || (a.endMin - b.endMin));
+
+  let active = [];            // { endMin, colIndex, ref }
+  let freeCols = [];          // number[]
+  let nextCol = 0;
+
+  let group = [];             // 現在の重なりグループ
+  let groupMaxCols = 0;
+
+  function releaseEnded(curStart) {
+    // curStart 以前に終了したものを開放
+    const still = [];
+    for (const a of active) {
+      if (a.endMin <= curStart) {
+        freeCols.push(a.colIndex);
+      } else {
+        still.push(a);
+      }
+    }
+    active = still;
+    freeCols.sort((x,y)=>x-y);
+  }
+
+  function finalizeGroup() {
+    if (!group.length) return;
+    for (const e of group) e.colCount = Math.max(1, groupMaxCols);
+    group = [];
+    groupMaxCols = 0;
+  }
+
+  for (const e of evs) {
+    releaseEnded(e.startMin);
+
+    // activeが空なら、新しいグループ開始
+    if (active.length === 0) {
+      finalizeGroup();
+      nextCol = 0;
+      freeCols = [];
+    }
+
+    const colIndex = freeCols.length ? freeCols.shift() : nextCol++;
+    e.colIndex = colIndex;
+
+    group.push(e);
+
+    active.push({ endMin: e.endMin, colIndex, ref: e });
+
+    // 同時重なり数＝activeの数。最大をcolCountにする（Googleの横並びの基本）
+    groupMaxCols = Math.max(groupMaxCols, active.length);
+  }
+
+  finalizeGroup();
+  return evs;
+}
+
+/* ========= 描画 ========= */
+
+function renderProjects(projects, rangeStart, days, shortageIdSet) {
   const cols = Array.from(document.querySelectorAll(".cal-day-col"));
   const cellH = getCellHeightPx();
   const minutesPerCell = 30;
 
-  // 既存ブロックを消す（slot線は残す）
   for (const col of cols) {
     const old = Array.from(col.querySelectorAll(".cal-project"));
     for (const el of old) el.remove();
   }
 
   const rangeEnd = addDays(rangeStart, days);
+  const returnUrl = location.pathname + location.search;
+
+  // 1) 日ごとにイベントを集める（開始日基準：現仕様に合わせる）
+  const byDay = new Map(); // dayKey -> { colEl, events: [] }
 
   for (const p of projects) {
     const sRaw = p.usage_start_at ?? p.usage_start;
@@ -205,10 +397,8 @@ function renderProjects(projects, rangeStart, days) {
     const e = parseIsoZ(eRaw);
     if (!s || !e) continue;
 
-    // 表示範囲と無関係ならスキップ（ざっくり）
     if (e <= rangeStart || s >= rangeEnd) continue;
 
-    // どの日付列に置くか（開始日基準）
     const dayKey = startOfDay(s).toISOString().slice(0, 10);
     const col = cols.find(c => c.dataset.date === dayKey);
     if (!col) continue;
@@ -218,22 +408,64 @@ function renderProjects(projects, rangeStart, days) {
     const startMin = clamp(minutesFromDayStart(s, dayStart), 0, 24 * 60);
     const endMin = clamp(minutesFromDayStart(e, dayStart), 0, 24 * 60);
 
-    const top = Math.floor(startMin / minutesPerCell) * cellH + (startMin % minutesPerCell) * (cellH / minutesPerCell);
-    const height = Math.max(10, (endMin - startMin) * (cellH / minutesPerCell));
+    if (!byDay.has(dayKey)) byDay.set(dayKey, { colEl: col, events: [] });
+    byDay.get(dayKey).events.push({ p, startMin, endMin });
+  }
 
-    const block = document.createElement("div");
-    block.className = "cal-project";
-    block.classList.add(p.status || "draft");
-    block.style.top = `${top}px`;
-    block.style.height = `${height}px`;
-    block.textContent = p.title ?? "(無題)";
-    block.dataset.projectId = p.id;
+  // 2) 日ごとに重なりレイアウトを計算して描画
+  for (const { colEl, events } of byDay.values()) {
+    const laid = layoutOverlaps(events.map(e => ({
+      p: e.p,
+      startMin: e.startMin,
+      endMin: e.endMin,
+      colIndex: 0,
+      colCount: 1
+    })));
 
-    block.addEventListener("click", () => {
-      location.href = `/project-edit.html?project_id=${p.id}`;
-    });
+    const innerW = Math.max(0, colEl.clientWidth - 12); // 左右6pxを引いた内側
+    const gap = 6;
 
-    col.appendChild(block);
+    for (const e of laid) {
+      const p = e.p;
+
+      const top = Math.floor(e.startMin / minutesPerCell) * cellH + (e.startMin % minutesPerCell) * (cellH / minutesPerCell);
+      const height = Math.max(10, (e.endMin - e.startMin) * (cellH / minutesPerCell));
+
+      const colsCount = Math.max(1, e.colCount);
+      const idx = Math.max(0, e.colIndex);
+
+      const w = colsCount === 1 ? innerW : Math.max(40, Math.floor((innerW - gap * (colsCount - 1)) / colsCount));
+      const left = 6 + idx * (w + gap);
+
+      const block = document.createElement("div");
+      block.className = "cal-project";
+      block.classList.add(p.status || "draft");
+
+      const pid = String(p.id);
+      block.dataset.projectId = pid;
+
+      if (shortageIdSet && shortageIdSet.has(pid)) {
+        block.classList.add("cal-project--shortage");
+      }
+
+      block.style.top = `${top}px`;
+      block.style.height = `${height}px`;
+
+      // 横並びレイアウト（rightは使わない）
+      block.style.left = `${left}px`;
+      block.style.width = `${w}px`;
+      block.style.right = "auto";
+
+      block.textContent = p.title ?? "(無題)";
+
+      block.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openProjectModal(p.id, p.title ?? "(無題)", returnUrl);
+      });
+
+      colEl.appendChild(block);
+    }
   }
 }
 
@@ -262,7 +494,15 @@ async function load() {
   buildGridShell(range.start, range.days);
 
   const projects = await apiJson("/api/projects");
-  renderProjects(projects, range.start, range.days);
+
+  let shortageIdSet = null;
+  try {
+    shortageIdSet = await computeShortageIdSetForVisibleProjects(projects, range.start, range.days);
+  } catch {
+    shortageIdSet = null;
+  }
+
+  renderProjects(projects, range.start, range.days, shortageIdSet);
 }
 
 function shiftAnchor(dir) {
@@ -284,11 +524,15 @@ function wire() {
 
   if (prevBtn) prevBtn.addEventListener("click", () => { shiftAnchor(-1); load().catch(e => showError(e.message)); });
   if (nextBtn) nextBtn.addEventListener("click", () => { shiftAnchor(1); load().catch(e => showError(e.message)); });
-  if (newBtn) newBtn.addEventListener("click", () => { location.href = "/project-new.html"; });
+
+  if (newBtn) newBtn.addEventListener("click", () => {
+    const returnUrl = location.pathname + location.search;
+    location.href = `/project-new.html?return=${encodeURIComponent(returnUrl)}`;
+  });
 
   if (datePicker) {
     datePicker.addEventListener("change", () => {
-      const v = datePicker.value; // YYYY-MM-DD
+      const v = datePicker.value;
       if (!v) return;
       const [y,m,d] = v.split("-").map(Number);
       anchorDate = new Date(y, m - 1, d);
@@ -305,6 +549,11 @@ function wire() {
       load().catch(e => showError(e.message));
     });
   }
+
+  // 画面幅が変わると横並びのpx計算がズレるので再描画
+  window.addEventListener("resize", () => {
+    load().catch(()=>{});
+  });
 }
 
 wire();

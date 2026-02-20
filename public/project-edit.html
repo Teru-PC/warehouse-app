@@ -29,6 +29,7 @@
 
     <div class="row">
       <button id="saveBtn">保存</button>
+      <button id="itemsBtn" class="ghost">機材割当へ</button>
       <button id="deleteBtn" style="background:#dc2626;color:#fff;">削除</button>
       <button id="backBtn" class="ghost">戻る</button>
     </div>
@@ -42,6 +43,7 @@
   const usageStart = document.getElementById("usageStart");
   const usageEnd = document.getElementById("usageEnd");
   const saveBtn = document.getElementById("saveBtn");
+  const itemsBtn = document.getElementById("itemsBtn");
   const deleteBtn = document.getElementById("deleteBtn");
   const backBtn = document.getElementById("backBtn");
 
@@ -59,6 +61,7 @@
     show("project_id が不正です");
     saveBtn.disabled = true;
     if (deleteBtn) deleteBtn.disabled = true;
+    if (itemsBtn) itemsBtn.disabled = true;
     return;
   }
 
@@ -109,6 +112,10 @@
   usageEnd.addEventListener("change", validate);
 
   backBtn.addEventListener("click", () => location.href = returnUrl);
+
+  itemsBtn.addEventListener("click", () => {
+    location.href = `/project-items.html?project_id=${encodeURIComponent(projectId)}&return=${encodeURIComponent(returnUrl)}`;
+  });
 
   saveBtn.addEventListener("click", async () => {
     validate();

@@ -12,7 +12,7 @@
   <main class="container">
     <div class="cal-topbar">
       <h1 class="cal-title">案件作成</h1>
-      <div class="cal-controls" style="justify-content:flex-start;">
+      <div class="cal-controls" style="justify-content:flex-start; gap:10px;">
         <button id="backBtn" class="cal-nav-btn" type="button">戻る</button>
       </div>
     </div>
@@ -44,8 +44,21 @@
         <input id="end" type="datetime-local" required />
       </label>
 
+      <hr style="margin:14px 0; opacity:.4" />
+
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <div style="font-weight:700;">機材割当（作成後に反映）</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" id="reloadEquipBtn" class="ghost">機材を再読み込み</button>
+          <button type="button" id="addRowBtn" class="ghost">＋ 行を追加</button>
+        </div>
+      </div>
+
+      <div id="itemsWrap" style="margin-top:10px;"></div>
+      <div id="itemsMsg" class="cal-error" style="min-height:18px;"></div>
+
       <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="submit">保存</button>
+        <button id="saveBtn" type="submit">保存して割当へ</button>
       </div>
     </form>
   </main>
@@ -55,11 +68,20 @@
       const msg = document.getElementById("msg");
       const form = document.getElementById("form");
       const backBtn = document.getElementById("backBtn");
+      const itemsWrap = document.getElementById("itemsWrap");
+      const addRowBtn = document.getElementById("addRowBtn");
+      const reloadEquipBtn = document.getElementById("reloadEquipBtn");
+      const itemsMsg = document.getElementById("itemsMsg");
+      const saveBtn = document.getElementById("saveBtn");
 
       function token(){ return localStorage.getItem("token") || ""; }
 
       function show(text){
         msg.textContent = text || "";
+      }
+
+      function showItemsMsg(text){
+        itemsMsg.textContent = text || "";
       }
 
       function getReturnUrl(){
@@ -76,9 +98,145 @@
         return;
       }
 
+      async function apiJson(path, options = {}) {
+        const headers = Object.assign({}, options.headers || {}, {
+          "Authorization": "Bearer " + token()
+        });
+        if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+
+        const res = await fetch(path, { ...options, headers });
+        const text = await res.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+        if (!res.ok) {
+          const m = (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
+          throw new Error(m);
+        }
+        return data;
+      }
+
+      function normalizeEquipmentPayload(data) {
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.equipment)) return data.equipment;
+        if (data && Array.isArray(data.items)) return data.items;
+        if (data && Array.isArray(data.data)) return data.data;
+        return [];
+      }
+
+      let equipmentList = [];
+
+      async function loadEquipment(){
+        const raw = await apiJson("/api/equipment", { method: "GET" });
+        equipmentList = normalizeEquipmentPayload(raw);
+        return equipmentList;
+      }
+
+      function clearRows(){
+        itemsWrap.innerHTML = "";
+      }
+
+      function makeEquipmentSelect(){
+        const sel = document.createElement("select");
+        sel.className = "equipSel";
+
+        if (!equipmentList.length) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "機材がありません（先に機材登録してください）";
+          sel.appendChild(opt);
+          sel.disabled = true;
+          return sel;
+        }
+
+        for (const e of equipmentList) {
+          const opt = document.createElement("option");
+          opt.value = e.id;
+          opt.textContent = `${e.name}（在庫:${e.total_quantity}）`;
+          sel.appendChild(opt);
+        }
+        return sel;
+      }
+
+      function addRow(initial = null){
+        const row = document.createElement("div");
+        row.className = "assign-row";
+        row.style.display = "flex";
+        row.style.gap = "8px";
+        row.style.alignItems = "center";
+        row.style.flexWrap = "wrap";
+        row.style.marginTop = "8px";
+
+        const sel = makeEquipmentSelect();
+        if (initial && initial.equipment_id && !sel.disabled) sel.value = String(initial.equipment_id);
+
+        const qty = document.createElement("input");
+        qty.type = "number";
+        qty.min = "1";
+        qty.value = initial && initial.quantity ? String(initial.quantity) : "1";
+        qty.style.width = "120px";
+        if (sel.disabled) qty.disabled = true;
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "ghost";
+        del.textContent = "削除";
+        del.addEventListener("click", () => row.remove());
+
+        row.appendChild(sel);
+        row.appendChild(qty);
+        row.appendChild(del);
+
+        itemsWrap.appendChild(row);
+      }
+
+      function readRows(){
+        const rows = Array.from(itemsWrap.querySelectorAll(".assign-row"));
+        const out = [];
+        for (const r of rows) {
+          const sel = r.querySelector(".equipSel");
+          const qtyEl = r.querySelector('input[type="number"]');
+
+          if (!sel || sel.disabled) continue;
+
+          const equipment_id = Number(sel.value);
+          const quantity = Number(qtyEl && qtyEl.value);
+
+          if (!equipment_id || !Number.isFinite(equipment_id)) continue;
+          if (!quantity || !Number.isFinite(quantity) || quantity <= 0) continue;
+
+          out.push({ equipment_id, quantity });
+        }
+        return out;
+      }
+
+      addRowBtn.addEventListener("click", () => {
+        showItemsMsg("");
+        addRow();
+      });
+
+      reloadEquipBtn.addEventListener("click", async () => {
+        showItemsMsg("");
+        try {
+          await loadEquipment();
+          clearRows();
+          if (equipmentList.length) {
+            addRow();
+            showItemsMsg("");
+          } else {
+            addRow(); // disabled 行を出して状況を見せる
+            showItemsMsg("機材が0件です。機材登録を先に行ってください。");
+          }
+        } catch (e) {
+          showItemsMsg("機材一覧の取得に失敗しました。ログイン状態と /api/equipment を確認してください。");
+        }
+      });
+
       form.addEventListener("submit", async (e)=>{
         e.preventDefault();
         show("");
+        showItemsMsg("");
+
+        saveBtn.disabled = true;
 
         const title = document.getElementById("title").value.trim();
         const status = document.getElementById("status").value;
@@ -87,6 +245,7 @@
 
         if (!startLocal || !endLocal){
           show("使用開始と使用終了は必須です。");
+          saveBtn.disabled = false;
           return;
         }
 
@@ -95,14 +254,15 @@
 
         if (isNaN(s.getTime()) || isNaN(en.getTime())){
           show("日時の形式が不正です。");
+          saveBtn.disabled = false;
           return;
         }
         if (en <= s){
           show("使用終了は使用開始より後にしてください。");
+          saveBtn.disabled = false;
           return;
         }
 
-        // 重要：UTC(Z)で送る
         const payload = {
           title: title || null,
           status,
@@ -110,29 +270,59 @@
           usage_end_at: en.toISOString()
         };
 
+        const rows = readRows();
+
         try{
-          const res = await fetch("/api/projects", {
+          const created = await apiJson("/api/projects", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + token()
-            },
             body: JSON.stringify(payload)
           });
 
-          const data = await res.json().catch(()=>null);
+          const projectId =
+            (created && (created.id || created.project_id)) ? (created.id || created.project_id)
+            : (created && created.project && (created.project.id || created.project.project_id)) ? (created.project.id || created.project.project_id)
+            : null;
 
-          if (!res.ok){
-            show((data && (data.message || data.error)) || "保存に失敗しました。");
-            return;
+          if (!projectId) {
+            throw new Error("案件作成は成功しましたが、project_id が取得できませんでした。");
           }
 
-          // 保存後カレンダーへ戻る
-          location.href = getReturnUrl();
+          for (const it of rows) {
+            await apiJson("/api/project-items", {
+              method: "POST",
+              body: JSON.stringify({
+                project_id: Number(projectId),
+                equipment_id: it.equipment_id,
+                quantity: it.quantity
+              })
+            });
+          }
+
+          const returnUrl = getReturnUrl();
+          location.href = `/project-items.html?project_id=${encodeURIComponent(projectId)}&return=${encodeURIComponent(returnUrl)}`;
+
         }catch(err){
-          show("通信エラー");
+          show(err && err.message ? err.message : "通信エラー");
+          saveBtn.disabled = false;
         }
       });
+
+      (async () => {
+        try {
+          await loadEquipment();
+          clearRows();
+          if (equipmentList.length) {
+            addRow();
+          } else {
+            addRow(); // disabled 行
+            showItemsMsg("機材が0件です。機材登録を先に行ってください。");
+          }
+        } catch (e) {
+          clearRows();
+          addRow(); // disabled 行
+          showItemsMsg("機材一覧の取得に失敗しました。ログイン状態と /api/equipment を確認してください。");
+        }
+      })();
     })();
   </script>
 </body>
