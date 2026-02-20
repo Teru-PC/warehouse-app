@@ -3,15 +3,23 @@ function qs(name) {
 }
 
 function getToken() {
-  return localStorage.getItem("token");
+  const keys = ["token", "jwt", "authToken", "access_token"];
+  for (const k of keys) {
+    const v = localStorage.getItem(k);
+    if (v && String(v).trim()) return String(v).trim().replace(/^Bearer\s+/i, "");
+  }
+  return null;
 }
 
 async function api(path, options = {}) {
   const token = getToken();
+
   const headers = Object.assign(
-    { "Content-Type": "application/json" },
+    {},
     options.headers || {}
   );
+
+  if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(path, { ...options, headers });
@@ -20,7 +28,7 @@ async function api(path, options = {}) {
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
 
   if (!res.ok) {
-    const msg = (data && data.message) ? data.message : `HTTP ${res.status}`;
+    const msg = (data && data.message) ? data.message : (typeof data === "string" && data ? data : `HTTP ${res.status}`);
     throw new Error(msg);
   }
   return data;
@@ -35,8 +43,23 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function getReturnUrl() {
+  return qs("return") || "/calendar.html?mode=week";
+}
+
+function showTopError(msg) {
+  // project-items.html 側に専用枠が無いので、projectInfoの先頭に出す
+  const info = document.getElementById("projectInfo");
+  if (!info) return;
+  const html = `
+    <div style="padding:10px; border:1px solid #ffcccc; background:#ffefef; border-radius:10px; margin-bottom:10px;">
+      ${escapeHtml(msg)}
+    </div>
+  `;
+  info.innerHTML = html + info.innerHTML;
+}
+
 async function loadProject(projectId) {
-  // 既存 API: /api/projects/:id がある前提
   const p = await api(`/api/projects/${projectId}`, { method: "GET" });
   const title = p.title ?? "(無題)";
   const status = p.status ?? "";
@@ -47,18 +70,49 @@ async function loadProject(projectId) {
     <div><b>状態:</b> ${escapeHtml(status)}</div>
     <div><b>使用:</b> ${escapeHtml(start)} 〜 ${escapeHtml(end)}</div>
     <div style="margin-top:8px">
-      <a href="/project-edit.html?project_id=${projectId}">編集画面へ</a>
+      <a href="/project-edit.html?project_id=${projectId}&return=${encodeURIComponent(getReturnUrl())}">編集画面へ</a>
       &nbsp;|&nbsp;
-      <a href="/calendar.html?mode=week">カレンダーへ</a>
+      <a href="${escapeHtml(getReturnUrl())}">戻る</a>
     </div>
   `;
   document.getElementById("projectInfo").innerHTML = html;
 }
 
+function normalizeEquipmentPayload(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.equipment)) return data.equipment;
+  if (data && Array.isArray(data.items)) return data.items;
+  if (data && Array.isArray(data.data)) return data.data;
+  return [];
+}
+
 async function loadEquipmentList() {
-  const list = await api("/api/equipment", { method: "GET" });
+  const raw = await api("/api/equipment", { method: "GET" });
+  const list = normalizeEquipmentPayload(raw);
+
   const sel = document.getElementById("equipmentSelect");
   sel.innerHTML = "";
+
+  if (!list.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "機材がありません（先に機材登録してください）";
+    sel.appendChild(opt);
+    sel.disabled = true;
+
+    const addBtn = document.getElementById("addBtn");
+    const qty = document.getElementById("qtyInput");
+    if (addBtn) addBtn.disabled = true;
+    if (qty) qty.disabled = true;
+    return;
+  }
+
+  sel.disabled = false;
+  const addBtn = document.getElementById("addBtn");
+  const qty = document.getElementById("qtyInput");
+  if (addBtn) addBtn.disabled = false;
+  if (qty) qty.disabled = false;
+
   for (const e of list) {
     const opt = document.createElement("option");
     opt.value = e.id;
@@ -105,31 +159,46 @@ async function loadItems(projectId) {
 
   for (const btn of document.querySelectorAll(".saveBtn")) {
     btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      const input = document.querySelector(`.qtyEdit[data-id="${id}"]`);
-      const qty = Number(input.value);
-      await api(`/api/project-items/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ quantity: qty })
-      });
-      await loadItems(projectId);
+      try {
+        const id = btn.getAttribute("data-id");
+        const input = document.querySelector(`.qtyEdit[data-id="${id}"]`);
+        const qty = Number(input.value);
+        if (!Number.isFinite(qty) || qty <= 0) throw new Error("数量が不正です");
+        await api(`/api/project-items/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({ quantity: qty })
+        });
+        await loadItems(projectId);
+      } catch (e) {
+        alert(e.message);
+      }
     });
   }
 
   for (const btn of document.querySelectorAll(".delBtn")) {
     btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      await api(`/api/project-items/${id}`, { method: "DELETE" });
-      await loadItems(projectId);
+      try {
+        const id = btn.getAttribute("data-id");
+        await api(`/api/project-items/${id}`, { method: "DELETE" });
+        await loadItems(projectId);
+      } catch (e) {
+        alert(e.message);
+      }
     });
   }
 }
 
 async function addItem(projectId) {
-  const equipmentId = Number(document.getElementById("equipmentSelect").value);
+  const sel = document.getElementById("equipmentSelect");
+  if (sel.disabled) return;
+
+  const equipmentId = Number(sel.value);
   const qty = Number(document.getElementById("qtyInput").value);
   const msg = document.getElementById("addMsg");
   msg.textContent = "";
+
+  if (!Number.isFinite(equipmentId) || equipmentId <= 0) throw new Error("機材の選択が不正です");
+  if (!Number.isFinite(qty) || qty <= 0) throw new Error("数量が不正です");
 
   await api("/api/project-items", {
     method: "POST",
@@ -145,20 +214,43 @@ async function addItem(projectId) {
 }
 
 async function main() {
+  if (!getToken()) {
+    location.href = "/index.html";
+    return;
+  }
+
   const projectId = Number(qs("project_id"));
   if (!projectId) {
     document.body.innerHTML = "project_id がありません。URLに ?project_id=数字 を付けて開いてください。";
     return;
   }
 
-  document.getElementById("backBtn").addEventListener("click", () => history.back());
-  document.getElementById("addBtn").addEventListener("click", () => addItem(projectId));
+  const backBtn = document.getElementById("backBtn");
+  if (backBtn) backBtn.addEventListener("click", () => {
+    location.href = getReturnUrl();
+  });
 
-  await loadProject(projectId);
-  await loadEquipmentList();
-  await loadItems(projectId);
+  const addBtn = document.getElementById("addBtn");
+  if (addBtn) addBtn.addEventListener("click", async () => {
+    try {
+      await addItem(projectId);
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+
+  try {
+    await loadProject(projectId);
+    await loadEquipmentList();
+    await loadItems(projectId);
+  } catch (e) {
+    // 401/403/500などで「操作不能」になっている原因を画面に出す
+    showTopError(e.message);
+    throw e;
+  }
 }
 
 main().catch(err => {
-  alert(err.message);
+  // 既に画面に表示しているので、alertは最小限
+  console.error(err);
 });
