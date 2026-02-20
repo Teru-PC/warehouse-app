@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>案件編集</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="page">
+    <h1>案件編集</h1>
+    <div id="err" class="err"></div>
+
+    <label>タイトル</label>
+    <input id="title" type="text" />
+
+    <label>状態</label>
+    <select id="status">
+      <option value="draft">draft</option>
+      <option value="confirmed">confirmed</option>
+      <option value="cancelled">cancelled</option>
+    </select>
+
+    <label>使用開始（必須）</label>
+    <input id="usageStart" type="datetime-local" />
+
+    <label>使用終了（必須）</label>
+    <input id="usageEnd" type="datetime-local" />
+
+    <div class="row">
+      <button id="saveBtn">保存</button>
+      <button id="deleteBtn" style="background:#dc2626;color:#fff;">削除</button>
+      <button id="backBtn" class="ghost">戻る</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const err = document.getElementById("err");
+  const title = document.getElementById("title");
+  const status = document.getElementById("status");
+  const usageStart = document.getElementById("usageStart");
+  const usageEnd = document.getElementById("usageEnd");
+  const saveBtn = document.getElementById("saveBtn");
+  const deleteBtn = document.getElementById("deleteBtn");
+  const backBtn = document.getElementById("backBtn");
+
+  function show(msg){ err.textContent = msg || ""; }
+  function token(){ return localStorage.getItem("token") || ""; }
+
+  function param(name){
+    return new URL(location.href).searchParams.get(name);
+  }
+
+  const projectId = param("project_id");
+  const returnUrl = param("return") || "/calendar.html?mode=week";
+
+  if (!projectId || !/^\d+$/.test(String(projectId))) {
+    show("project_id が不正です");
+    saveBtn.disabled = true;
+    if (deleteBtn) deleteBtn.disabled = true;
+    return;
+  }
+
+  async function api(path, opts = {}) {
+    const headers = Object.assign({}, opts.headers || {}, {
+      Authorization: "Bearer " + token(),
+    });
+    if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    const res = await fetch(path, { ...opts, headers });
+    const text = await res.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch {}
+    if (!res.ok) throw new Error((json && (json.error || json.message)) || text || "APIエラー");
+    return json;
+  }
+
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function toLocalInputValue(d){
+    const y = d.getFullYear();
+    const m = pad2(d.getMonth()+1);
+    const day = pad2(d.getDate());
+    const hh = pad2(d.getHours());
+    const mm = pad2(d.getMinutes());
+    return `${y}-${m}-${day}T${hh}:${mm}`;
+  }
+
+  function parseLocal(v){
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function localToUtcIso(v){
+    const d = parseLocal(v);
+    if (!d) return null;
+    return d.toISOString();
+  }
+
+  function validate(){
+    show("");
+    const s = parseLocal(usageStart.value);
+    const e = parseLocal(usageEnd.value);
+    if (!s || !e) { saveBtn.disabled = true; return; }
+    if (e <= s) { show("使用終了は使用開始より後にしてください"); saveBtn.disabled = true; return; }
+    saveBtn.disabled = false;
+  }
+
+  usageStart.addEventListener("change", validate);
+  usageEnd.addEventListener("change", validate);
+
+  backBtn.addEventListener("click", () => location.href = returnUrl);
+
+  saveBtn.addEventListener("click", async () => {
+    validate();
+    if (saveBtn.disabled) return;
+
+    try {
+      const body = {
+        title: title.value.trim(),
+        status: status.value,
+        usage_start_at: localToUtcIso(usageStart.value),
+        usage_end_at: localToUtcIso(usageEnd.value),
+      };
+      await api(`/api/projects/${projectId}`, { method: "PUT", body: JSON.stringify(body) });
+      location.href = returnUrl;
+    } catch (e) {
+      show(e.message);
+    }
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    show("");
+
+    const ok = confirm("この案件を削除します。よろしいですか？");
+    if (!ok) return;
+
+    try {
+      await api(`/api/projects/${projectId}`, { method: "DELETE" });
+      location.href = returnUrl;
+    } catch (e) {
+      show(e.message);
+    }
+  });
+
+  (async () => {
+    try {
+      const p = await api(`/api/projects/${projectId}`, { method: "GET" });
+
+      title.value = p.title || "";
+      status.value = p.status || "draft";
+
+      const s = new Date(p.usage_start_at);
+      const e = new Date(p.usage_end_at);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) {
+        show("開始/終了が読み取れません");
+        saveBtn.disabled = true;
+        return;
+      }
+
+      usageStart.value = toLocalInputValue(s);
+      usageEnd.value = toLocalInputValue(e);
+
+      validate();
+    } catch (e) {
+      show(e.message);
+    }
+  })();
+})();
+</script>
+</body>
+</html>

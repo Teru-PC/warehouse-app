@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>案件機材割当</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { padding: 12px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 10px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    input, select, button { font-size: 16px; padding: 8px; }
+    .danger { background: #ffefef; border: 1px solid #ffcccc; }
+    .btn { padding: 10px 12px; }
+  </style>
+</head>
+<body>
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">案件機材割当</h2>
+    <div class="row">
+      <button class="btn" id="backBtn">戻る</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="projectInfo">読み込み中...</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">割当済み一覧</h3>
+    <div id="itemsWrap">読み込み中...</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">機材を追加</h3>
+    <div class="row">
+      <select id="equipmentSelect"></select>
+      <input id="qtyInput" type="number" min="1" value="1" style="width:120px" />
+      <button class="btn" id="addBtn">追加</button>
+    </div>
+    <div id="addMsg" style="margin-top:8px"></div>
+  </div>
+
+  <script src="/js/project-items.js"></script>
+</body>
+</html>
