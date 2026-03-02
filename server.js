@@ -52,7 +52,8 @@ mustBeRouter("shortageRoutes", shortageRoutes);
 // mount
 app.use("/", authRoutes);
 app.use("/api", projectRoutes);
-app.use("/api", equipmentRoutes);
+app.use("/api/equipment", equipmentRoutes);
+app.use("/api/upload", asRouter(require("./routes/upload")));
 app.use("/api", projectItemRoutes);
 app.use("/api", shortageRoutes);
 

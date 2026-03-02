@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <script src="/js/auth.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>機材管理</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #111; }
+    header { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #e5e7eb; padding: 10px 14px; z-index: 10; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    header h1 { margin: 0; font-size: 18px; flex: 1; }
+    .pill { font-size: 12px; padding: 6px 10px; border-radius: 999px; background: #f3f4f6; border: 1px solid #e5e7eb; cursor: pointer; text-decoration: none; color: #111; }
+    main { padding: 12px 14px; max-width: 900px; margin: 0 auto; }
+    .btn { padding: 10px 16px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; font-size: 14px; font-weight: 600; }
+    .btn-primary { background: #111827; color: #fff; border-color: #111827; }
+    .btn-danger { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+    .equipment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .eq-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .eq-card img { width: 100%; height: 160px; object-fit: contain; border-radius: 10px; background: #f3f4f6; }
+    .eq-card .no-img { width: 100%; height: 160px; border-radius: 10px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 13px; }
+    .eq-name { font-weight: 700; font-size: 15px; }
+    .eq-qty { font-size: 13px; color: #374151; }
+    .eq-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 20px; width: min(92vw, 480px); display: flex; flex-direction: column; gap: 12px; }
+    .modal h2 { margin: 0; font-size: 17px; }
+    label { font-size: 12px; color: #374151; font-weight: 600; display: block; margin-bottom: 4px; }
+    input[type="text"], input[type="number"], input[type="url"] {
+      width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px;
+    }
+    .img-preview { width: 100%; height: 140px; object-fit: cover; border-radius: 10px; display: none; }
+    .err { color: #b91c1c; font-size: 13px; }
+    .empty { text-align: center; color: #9ca3af; padding: 40px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>機材管理</h1>
+    <a class="pill" href="/calendar.html">← カレンダー</a>
+    <a class="pill" href="/qr-list.html">QR一覧</a>
+    <button class="btn btn-primary" id="addBtn">＋ 機材を追加</button>
+  </header>
+
+  <main>
+    <div id="errorText" class="err" style="margin-bottom:8px;"></div>
+    <div class="equipment-grid" id="equipmentGrid">
+      <div class="empty">読み込み中...</div>
+    </div>
+  </main>
+
+  <!-- 登録・編集モーダル -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h2 id="modalTitle">機材を追加</h2>
+      <div>
+        <label>機材名 *</label>
+        <input id="fName" type="text" placeholder="例：カメラ Sony A7III" />
+      </div>
+      <div>
+        <label>在庫数 *</label>
+        <input id="fQty" type="number" min="0" placeholder="例：3" />
+      </div>
+      <div>
+        <label>画像（任意）</label>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <button class="btn" id="uploadTabBtn" style="flex:1;">ファイルを選択</button>
+          <button class="btn" id="urlTabBtn" style="flex:1;">URLで入力</button>
+        </div>
+        <div id="uploadArea">
+          <input id="fImageFile" type="file" accept="image/*" style="width:100%;" />
+          <div id="uploadProgress" style="font-size:12px; color:#6b7280; margin-top:4px;"></div>
+        </div>
+        <div id="urlArea" style="display:none;">
+          <input id="fImageUrl" type="url" placeholder="https://..." />
+        </div>
+        <img id="imgPreview" class="img-preview" style="margin-top:8px;" />
+      </div>
+      <div id="modalErr" class="err"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
+        <button class="btn" id="modalCancelBtn">キャンセル</button>
+        <button class="btn btn-primary" id="modalSaveBtn">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    function getToken() { return localStorage.getItem('token') || ''; }
+
+    async function apiFetch(path, opts = {}) {
+      const headers = Object.assign({ Authorization: `Bearer ${getToken()}` }, opts.headers || {});
+      if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      const res = await fetch(path, { ...opts, headers });
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch {}
+      if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
+      return json;
+    }
+
+    let equipments = [];
+    let editingId = null;
+
+    const grid = document.getElementById('equipmentGrid');
+    const errorText = document.getElementById('errorText');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalTitle = document.getElementById('modalTitle');
+    const fName = document.getElementById('fName');
+    const fQty = document.getElementById('fQty');
+    const fImageUrl = document.getElementById('fImageUrl');
+    const imgPreview = document.getElementById('imgPreview');
+    const modalErr = document.getElementById('modalErr');
+
+    async function load() {
+      try {
+        equipments = await apiFetch('/api/equipment');
+        render();
+      } catch (e) {
+        errorText.textContent = '機材一覧の取得に失敗しました: ' + e.message;
+      }
+    }
+
+    function render() {
+      grid.innerHTML = '';
+      if (equipments.length === 0) {
+        grid.innerHTML = '<div class="empty">機材が登録されていません</div>';
+        return;
+      }
+      for (const eq of equipments) {
+        const card = document.createElement('div');
+        card.className = 'eq-card';
+
+        if (eq.image_url) {
+          card.innerHTML += `<img src="${eq.image_url}" alt="${eq.name}" onerror="this.style.display='none'" />`;
+        } else {
+          card.innerHTML += `<div class="no-img">画像なし</div>`;
+        }
+
+        card.innerHTML += `
+          <div class="eq-name">${eq.name}</div>
+          <div class="eq-qty">在庫数：${eq.total_quantity} 台</div>
+          <div class="eq-actions">
+            <button class="btn" data-edit="${eq.id}">編集</button>
+            <button class="btn btn-danger" data-delete="${eq.id}">削除</button>
+          </div>
+        `;
+
+        card.querySelector('[data-edit]').addEventListener('click', () => openEdit(eq));
+        card.querySelector('[data-delete]').addEventListener('click', () => deleteEq(eq));
+
+        grid.appendChild(card);
+      }
+    }
+
+    // タブ切り替え
+    document.getElementById('uploadTabBtn').addEventListener('click', () => {
+      document.getElementById('uploadArea').style.display = 'block';
+      document.getElementById('urlArea').style.display = 'none';
+    });
+    document.getElementById('urlTabBtn').addEventListener('click', () => {
+      document.getElementById('uploadArea').style.display = 'none';
+      document.getElementById('urlArea').style.display = 'block';
+    });
+
+    // ファイル選択時にCloudinaryへアップロード
+    document.getElementById('fImageFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const progress = document.getElementById('uploadProgress');
+      progress.textContent = 'アップロード中...';
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const res = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${getToken()}` },
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'アップロード失敗');
+        fImageUrl.value = data.url;
+        imgPreview.src = data.url;
+        imgPreview.style.display = 'block';
+        progress.textContent = 'アップロード完了！';
+      } catch (e) {
+        progress.textContent = 'エラー: ' + e.message;
+      }
+    });
+
+    function openAdd() {
+      editingId = null;
+      modalTitle.textContent = '機材を追加';
+      fName.value = '';
+      fQty.value = '';
+      fImageUrl.value = '';
+      imgPreview.style.display = 'none';
+      modalErr.textContent = '';
+      modalOverlay.classList.add('active');
+      fName.focus();
+    }
+
+    function openEdit(eq) {
+      editingId = eq.id;
+      modalTitle.textContent = '機材を編集';
+      fName.value = eq.name;
+      fQty.value = eq.total_quantity;
+      fImageUrl.value = eq.image_url || '';
+      updatePreview();
+      modalErr.textContent = '';
+      modalOverlay.classList.add('active');
+      fName.focus();
+    }
+
+    function closeModal() {
+      modalOverlay.classList.remove('active');
+    }
+
+    function updatePreview() {
+      const url = fImageUrl.value.trim();
+      if (url) {
+        imgPreview.src = url;
+        imgPreview.style.display = 'block';
+      } else {
+        imgPreview.style.display = 'none';
+      }
+    }
+
+    async function save() {
+      modalErr.textContent = '';
+      const name = fName.value.trim();
+      const total_quantity = parseInt(fQty.value);
+      const image_url = fImageUrl.value.trim() || null;
+
+      if (!name) { modalErr.textContent = '機材名を入力してください'; return; }
+      if (isNaN(total_quantity) || total_quantity < 0) { modalErr.textContent = '在庫数を0以上で入力してください'; return; }
+
+      try {
+        if (editingId) {
+          await apiFetch(`/api/equipment/${editingId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, total_quantity, image_url }),
+          });
+        } else {
+          await apiFetch('/api/equipment', {
+            method: 'POST',
+            body: JSON.stringify({ name, total_quantity, image_url }),
+          });
+        }
+        closeModal();
+        await load();
+      } catch (e) {
+        modalErr.textContent = e.message;
+      }
+    }
+
+    async function deleteEq(eq) {
+      if (!confirm(`「${eq.name}」を削除しますか？`)) return;
+      try {
+        await apiFetch(`/api/equipment/${eq.id}`, { method: 'DELETE' });
+        await load();
+      } catch (e) {
+        errorText.textContent = '削除に失敗しました: ' + e.message;
+      }
+    }
+
+    document.getElementById('addBtn').addEventListener('click', openAdd);
+    document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
+    document.getElementById('modalSaveBtn').addEventListener('click', save);
+    fImageUrl.addEventListener('input', updatePreview);
+    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+    load();
+  })();
+  </script>
+</body>
+</html>
+```
+
+**Ctrl+S で保存 → サーバー再起動 → ブラウザで以下を開いてください：**
+```
+http://localhost:10000/equipment.html
