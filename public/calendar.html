@@ -66,21 +66,7 @@
       align-items: center;
     }
     .cal-error { color: #b91c1c; min-height: 18px; font-size: 12px; }
-    .cal-topbar-spacer {
-      height: 88px;
-    }
-    .cal-days-header {
-      position: sticky;
-      top: 88px;
-      z-index: 100;
-      background: #fff;
-    }
-    .cal-corner {
-      position: sticky;
-      top: 88px;
-      z-index: 110;
-      background: #fff;
-    }
+    .cal-topbar-spacer { height: 88px; }
   </style>
 </head>
 <body>
@@ -107,14 +93,13 @@
   <div class="cal-topbar-spacer"></div>
 
   <div id="gridRoot">
-    <div class="cal-grid-shell">
-      <div class="cal-corner"></div>
-      <div class="cal-days-header" id="daysHeader"></div>
-      <div class="cal-scroll-body">
-        <div class="cal-time-col" id="timeCol"></div>
-        <div class="cal-days-body" id="daysBody">
-          <div class="cal-days-grid" id="daysGrid"></div>
-        </div>
+    <div class="cal-scroll-body">
+      <div class="cal-time-col" id="timeCol">
+        <div class="cal-time-corner"></div>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div class="cal-days-header" id="daysHeader"></div>
+        <div class="cal-days-grid" id="daysGrid"></div>
       </div>
     </div>
   </div>
