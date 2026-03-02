@@ -333,6 +333,83 @@
         col.appendChild(el);
       }
     }
+
+    // 発送・返却バー描画
+    for (const p of projects) {
+      const startIso = p.usage_start_at || p.usage_start;
+      const shippingDate = p.shipping_date;
+      const returnDueDate = p.return_due_date;
+      if (!startIso) continue;
+
+      const statusColor = {
+        draft: 'rgba(147,197,253,0.5)',
+        confirmed: 'rgba(134,239,172,0.5)',
+        cancelled: 'rgba(252,165,165,0.5)',
+      };
+      const color = statusColor[p.status || 'draft'] || 'rgba(200,200,200,0.5)';
+
+      // 発送バー: 発送日18:00 〜 案件開始
+      if (shippingDate) {
+        const shipDayKey = shippingDate.slice(0, 10);
+        if (visibleSet.has(shipDayKey)) {
+          const col = daysGrid.querySelector(`.cal-day-col[data-day="${shipDayKey}"]`);
+          if (col) {
+            const startMin = 18 * 60; // 18:00
+            const endMin = DAY_MIN;   // 24:00
+            const el = document.createElement('div');
+            el.className = 'cal-ship-bar';
+            el.textContent = '発送';
+            el.style.cssText = `
+              position:absolute;
+              top:${(startMin/DAY_MIN)*100}%;
+              height:${((endMin-startMin)/DAY_MIN)*100}%;
+              left:2px; right:2px;
+              background:${color};
+              border-radius:4px;
+              font-size:10px;
+              font-weight:700;
+              color:#374151;
+              padding:2px 4px;
+              pointer-events:none;
+              z-index:0;
+              box-sizing:border-box;
+            `;
+            col.appendChild(el);
+          }
+        }
+      }
+
+      // 返却バー: 案件終了 〜 返却日12:00
+      if (returnDueDate) {
+        const returnDayKey = returnDueDate.slice(0, 10);
+        if (visibleSet.has(returnDayKey)) {
+          const col = daysGrid.querySelector(`.cal-day-col[data-day="${returnDayKey}"]`);
+          if (col) {
+            const startMin = 0;      // 0:00
+            const endMin = 12 * 60;  // 12:00
+            const el = document.createElement('div');
+            el.className = 'cal-ship-bar';
+            el.textContent = '返却';
+            el.style.cssText = `
+              position:absolute;
+              top:${(startMin/DAY_MIN)*100}%;
+              height:${((endMin-startMin)/DAY_MIN)*100}%;
+              left:2px; right:2px;
+              background:${color};
+              border-radius:4px;
+              font-size:10px;
+              font-weight:700;
+              color:#374151;
+              padding:2px 4px;
+              pointer-events:none;
+              z-index:0;
+              box-sizing:border-box;
+            `;
+            col.appendChild(el);
+          }
+        }
+      }
+    }
   }
 
   function getBaseDayKey() {
