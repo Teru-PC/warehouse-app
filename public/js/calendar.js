@@ -130,9 +130,19 @@
       const wd = ["日", "月", "火", "水", "木", "金", "土"][w];
       const head = document.createElement("div");
       head.className = "cal-day-head";
+      head.dataset.day = dayKey;
       if (w === 6) head.classList.add("is-sat");
       if (w === 0) head.classList.add("is-sun");
-      head.textContent = `${mo}/${d}(${wd})`;
+
+      const label = document.createElement("div");
+      label.textContent = `${mo}/${d}(${wd})`;
+      head.appendChild(label);
+
+      const btnArea = document.createElement("div");
+      btnArea.className = "cal-ship-btn-area";
+      btnArea.dataset.dayBtns = dayKey;
+      head.appendChild(btnArea);
+
       daysHeader.appendChild(head);
     }
   }
@@ -334,32 +344,6 @@
       }
     }
 
-    // 発送・返却バー描画
-    function makeBar(col, startMin, endMin, text, color) {
-      if (endMin <= startMin) return;
-      const el = document.createElement('div');
-      el.className = 'cal-ship-bar';
-      el.textContent = text;
-      el.style.cssText = `
-        position:absolute;
-        top:${(startMin/DAY_MIN)*100}%;
-        height:${((endMin-startMin)/DAY_MIN)*100}%;
-        left:2px; right:2px;
-        background:${color};
-        border-radius:4px;
-        font-size:10px;
-        font-weight:700;
-        color:#92400e;
-        padding:2px 4px;
-        pointer-events:none;
-        z-index:0;
-        box-sizing:border-box;
-        overflow:hidden;
-        white-space:nowrap;
-        text-overflow:ellipsis;
-      `;
-      col.appendChild(el);
-    }
 
     const SHIP_COLOR = 'rgba(254,240,138,0.75)'; // 薄い黄色
 
@@ -421,6 +405,36 @@
   }
 
   function getBaseDayKey() {
+    function renderShipBtns(projects) {
+    // 既存ボタンをクリア
+    document.querySelectorAll('.cal-ship-btn-area').forEach(a => a.innerHTML = '');
+
+    for (const p of projects) {
+      if (!p.shipping_date) continue;
+      const shipDayKey = p.shipping_date.slice(0, 10);
+      const btnArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${shipDayKey}"]`);
+      if (!btnArea) continue;
+
+      const startUtc = new Date(p.usage_start_at || p.usage_start);
+      const startParts = partsFromDateInJst(startUtc, false);
+      const mo = startParts.mo;
+      const da = startParts.d;
+
+      const btn = document.createElement('button');
+      btn.className = 'cal-ship-btn';
+      btn.innerHTML = `【発送】${p.title || ''} ${mo}/${da}`;
+      btn.title = `【発送】${p.title || ''} ${mo}/${da}`;
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const ret = encodeURIComponent(location.pathname + location.search);
+        location.href = `/checklist.html?project_id=${encodeURIComponent(String(p.id))}&return=${ret}`;
+      });
+      btnArea.appendChild(btn);
+    }
+  }
+
+  function getBaseDayKey() {
     if (baseDateStr && /^\d{4}-\d{2}-\d{2}$/.test(baseDateStr)) return baseDateStr;
     return jstTodayKey();
   }
@@ -462,6 +476,7 @@
         fetchShortages(days),
       ]);
       renderProjects(projects, days, shortageMap);
+      renderShipBtns(projects);
 
       // 7:00の位置にスクロール（上にスクロールで0:00も見られる）
       const slot7 = document.querySelector(".cal-time-slot");
