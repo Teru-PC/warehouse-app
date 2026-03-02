@@ -50,10 +50,11 @@
 .cal-time-corner{
   position:sticky;
   top:88px;
-  height:44px;
   background:#fff;
   border-bottom:1px solid #e5e7eb;
   z-index:40;
+  box-sizing:border-box;
+  min-height:10px;
 }
 
 .cal-time-slot{
