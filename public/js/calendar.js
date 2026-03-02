@@ -1,560 +1,394 @@
-function getToken() {
-  const keys = ["token", "jwt", "authToken", "access_token"];
-  for (const k of keys) {
-    const v = localStorage.getItem(k);
-    if (v && String(v).trim()) return String(v).trim().replace(/^Bearer\s+/i, "");
-  }
-  return null;
-}
+(() => {
+  "use strict";
 
-async function apiJson(url) {
-  const token = getToken();
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const TZ = "Asia/Tokyo";
+  const DAY_MIN = 1440;
+  const SLOT_MIN = 30;
+  const GUTTER_PX = 4;
 
-  const text = await res.text();
-  let data;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-
-  if (!res.ok) {
-    const msg = (data && data.message) ? data.message : `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
-}
-
-function qs(name) {
-  return new URL(location.href).searchParams.get(name);
-}
-
-function setQs(name, value) {
-  const u = new URL(location.href);
-  u.searchParams.set(name, value);
-  history.replaceState(null, "", u.toString());
-}
-
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function formatHeader(d) {
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const w = ["日","月","火","水","木","金","土"][d.getDay()];
-  return `${m}/${day}（${w}）`;
-}
-
-function startOfDay(d) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-}
-
-function addDays(d, n) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-function startOfWeek(d) {
-  const x = startOfDay(d);
-  const day = x.getDay(); // 0=Sun
-  return addDays(x, -day);
-}
-
-function startOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-}
-
-function parseIsoZ(s) {
-  const dt = new Date(s);
-  if (isNaN(dt.getTime())) return null;
-  return dt;
-}
-
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function clearError() {
-  const el = document.getElementById("errorText");
-  if (el) el.textContent = "";
-}
-
-function showError(msg) {
-  const el = document.getElementById("errorText");
-  if (el) el.textContent = msg;
-}
-
-function getCellHeightPx() {
-  const v = getComputedStyle(document.documentElement).getPropertyValue("--cell-h").trim();
-  const n = Number(String(v).replace("px",""));
-  return Number.isFinite(n) && n > 0 ? n : 28;
-}
-
-function setActiveMode(mode) {
-  for (const id of ["modeDay","modeWeek","mode2Week","modeMonth"]) {
-    const btn = document.getElementById(id);
-    if (!btn) continue;
-    const m = btn.getAttribute("data-mode");
-    btn.classList.toggle("is-active", m === mode);
-  }
-}
-
-function computeRange(anchor, mode) {
-  if (mode === "day") {
-    const s = startOfDay(anchor);
-    return { start: s, days: 1 };
-  }
-  if (mode === "week") {
-    const s = startOfWeek(anchor);
-    return { start: s, days: 7 };
-  }
-  if (mode === "2week") {
-    const s = startOfWeek(anchor);
-    return { start: s, days: 14 };
-  }
-  const s = startOfMonth(anchor);
-  const y = s.getFullYear();
-  const m = s.getMonth();
-  const next = new Date(y, m + 1, 1);
-  const days = Math.round((next - s) / (24 * 60 * 60 * 1000));
-  return { start: s, days };
-}
-
-function buildTimeColumn() {
+  const daysHeader = document.getElementById("daysHeader");
   const timeCol = document.getElementById("timeCol");
-  timeCol.innerHTML = "";
+  const daysGrid = document.getElementById("daysGrid");
+  const errorText = document.getElementById("errorText");
 
-  const cellH = getCellHeightPx();
-
-  for (let i = 0; i < 48; i++) {
-    const h = Math.floor(i / 2);
-    const mm = (i % 2) === 0 ? "00" : "30";
-
-    const slot = document.createElement("div");
-    slot.className = "cal-time-slot";
-    slot.style.height = `${cellH}px`;
-    slot.textContent = `${pad2(h)}:${mm}`;
-    timeCol.appendChild(slot);
-  }
-}
-
-function buildGridShell(rangeStart, days) {
-  const header = document.getElementById("daysHeader");
-  const grid = document.getElementById("daysGrid");
-  header.innerHTML = "";
-  grid.innerHTML = "";
-
-  const cellH = getCellHeightPx();
-
-  for (let di = 0; di < days; di++) {
-    const date = addDays(rangeStart, di);
-    const dow = date.getDay();
-
-    const head = document.createElement("div");
-    head.className = "cal-day-head";
-    if (dow === 6) head.classList.add("is-sat");
-    if (dow === 0) head.classList.add("is-sun");
-    head.textContent = formatHeader(date);
-    header.appendChild(head);
-
-    const col = document.createElement("div");
-    col.className = "cal-day-col";
-    if (dow === 6) col.classList.add("is-sat");
-    if (dow === 0) col.classList.add("is-sun");
-    col.dataset.date = date.toISOString().slice(0, 10);
-
-    for (let i = 0; i < 48; i++) {
-      const line = document.createElement("div");
-      line.className = "cal-slot-line";
-      line.style.height = `${cellH}px`;
-      if (i % 2 === 0) line.classList.add("hour");
-      col.appendChild(line);
-    }
-
-    grid.appendChild(col);
-  }
-}
-
-function minutesFromDayStart(dt, dayStart) {
-  return Math.round((dt - dayStart) / 60000);
-}
-
-/* ========= 不足判定（カレンダー表示用） ========= */
-
-function normalizeShortagesPayload(data) {
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.shortages)) return data.shortages;
-  if (data && Array.isArray(data.items)) return data.items;
-  if (data && Array.isArray(data.data)) return data.data;
-  return [];
-}
-
-function hasShortageFromList(list) {
-  for (const it of list) {
-    const v = Number(it && it.shortage);
-    if (Number.isFinite(v) && v > 0) return true;
-  }
-  return false;
-}
-
-const shortagePromiseCache = new Map();
-
-function fetchProjectShortageFlag(projectId) {
-  const id = String(projectId);
-  if (shortagePromiseCache.has(id)) return shortagePromiseCache.get(id);
-
-  const p = (async () => {
-    try {
-      const data = await apiJson(`/api/shortages?project_id=${encodeURIComponent(id)}`);
-      const list = normalizeShortagesPayload(data);
-      return hasShortageFromList(list);
-    } catch {
-      return false;
-    }
-  })();
-
-  shortagePromiseCache.set(id, p);
-  return p;
-}
-
-function computeVisibleProjects(projects, rangeStart, days) {
-  const cols = Array.from(document.querySelectorAll(".cal-day-col"));
-  const rangeEnd = addDays(rangeStart, days);
-  const visible = [];
-
-  for (const p of projects) {
-    const sRaw = p.usage_start_at ?? p.usage_start;
-    const eRaw = p.usage_end_at ?? p.usage_end;
-    const s = parseIsoZ(sRaw);
-    const e = parseIsoZ(eRaw);
-    if (!s || !e) continue;
-
-    if (e <= rangeStart || s >= rangeEnd) continue;
-
-    const dayKey = startOfDay(s).toISOString().slice(0, 10);
-    const col = cols.find(c => c.dataset.date === dayKey);
-    if (!col) continue;
-
-    visible.push(p);
-  }
-
-  return visible;
-}
-
-async function computeShortageIdSetForVisibleProjects(projects, rangeStart, days) {
-  const visible = computeVisibleProjects(projects, rangeStart, days);
-  const ids = Array.from(new Set(visible.map(p => p.id).filter(v => v !== null && v !== undefined)));
-
-  const shortageFlags = await Promise.all(ids.map(id => fetchProjectShortageFlag(id)));
-
-  const set = new Set();
-  for (let i = 0; i < ids.length; i++) {
-    if (shortageFlags[i]) set.add(String(ids[i]));
-  }
-  return set;
-}
-
-/* ========= 案件クリック用モーダル ========= */
-
-function ensureProjectModal() {
-  let overlay = document.getElementById("projectModalOverlay");
-  if (overlay) return overlay;
-
-  overlay = document.createElement("div");
-  overlay.id = "projectModalOverlay";
-  overlay.className = "cal-modal-overlay";
-  overlay.innerHTML = `
-    <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle">
-      <div class="cal-modal-title" id="calModalTitle">案件</div>
-      <div class="cal-modal-actions">
-        <button type="button" class="cal-modal-btn" id="calModalEditBtn">編集へ</button>
-        <button type="button" class="cal-modal-btn cal-modal-btn--primary" id="calModalItemsBtn">機材割当へ</button>
-      </div>
-      <div class="cal-modal-actions" style="justify-content:flex-end; margin-top:10px;">
-        <button type="button" class="cal-modal-btn" id="calModalCloseBtn">閉じる</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.classList.remove("is-open");
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") overlay.classList.remove("is-open");
-  });
-
-  return overlay;
-}
-
-function openProjectModal(projectId, title, returnUrl) {
-  const overlay = ensureProjectModal();
-  const t = overlay.querySelector("#calModalTitle");
-  const editBtn = overlay.querySelector("#calModalEditBtn");
-  const itemsBtn = overlay.querySelector("#calModalItemsBtn");
-  const closeBtn = overlay.querySelector("#calModalCloseBtn");
-
-  t.textContent = title ? `案件：${title}` : "案件";
-
-  editBtn.onclick = () => {
-    location.href = `/project-edit.html?project_id=${encodeURIComponent(projectId)}&return=${encodeURIComponent(returnUrl)}`;
+  const modeBtns = {
+    day: document.getElementById("modeDay"),
+    week: document.getElementById("modeWeek"),
+    "2week": document.getElementById("mode2Week"),
+    month: document.getElementById("modeMonth"),
   };
-
-  itemsBtn.onclick = () => {
-    location.href = `/project-items.html?project_id=${encodeURIComponent(projectId)}&return=${encodeURIComponent(returnUrl)}`;
-  };
-
-  closeBtn.onclick = () => overlay.classList.remove("is-open");
-
-  overlay.classList.add("is-open");
-}
-
-/* ========= 重なりレイアウト（同日内で横並び） ========= */
-
-function layoutOverlaps(dayEvents) {
-  // dayEvents: [{ id, startMin, endMin, p, ... }]
-  // 返す: 同じ配列に colIndex / colCount を付与
-  const evs = [...dayEvents].sort((a, b) => (a.startMin - b.startMin) || (a.endMin - b.endMin));
-
-  let active = [];            // { endMin, colIndex, ref }
-  let freeCols = [];          // number[]
-  let nextCol = 0;
-
-  let group = [];             // 現在の重なりグループ
-  let groupMaxCols = 0;
-
-  function releaseEnded(curStart) {
-    // curStart 以前に終了したものを開放
-    const still = [];
-    for (const a of active) {
-      if (a.endMin <= curStart) {
-        freeCols.push(a.colIndex);
-      } else {
-        still.push(a);
-      }
-    }
-    active = still;
-    freeCols.sort((x,y)=>x-y);
-  }
-
-  function finalizeGroup() {
-    if (!group.length) return;
-    for (const e of group) e.colCount = Math.max(1, groupMaxCols);
-    group = [];
-    groupMaxCols = 0;
-  }
-
-  for (const e of evs) {
-    releaseEnded(e.startMin);
-
-    // activeが空なら、新しいグループ開始
-    if (active.length === 0) {
-      finalizeGroup();
-      nextCol = 0;
-      freeCols = [];
-    }
-
-    const colIndex = freeCols.length ? freeCols.shift() : nextCol++;
-    e.colIndex = colIndex;
-
-    group.push(e);
-
-    active.push({ endMin: e.endMin, colIndex, ref: e });
-
-    // 同時重なり数＝activeの数。最大をcolCountにする（Googleの横並びの基本）
-    groupMaxCols = Math.max(groupMaxCols, active.length);
-  }
-
-  finalizeGroup();
-  return evs;
-}
-
-/* ========= 描画 ========= */
-
-function renderProjects(projects, rangeStart, days, shortageIdSet) {
-  const cols = Array.from(document.querySelectorAll(".cal-day-col"));
-  const cellH = getCellHeightPx();
-  const minutesPerCell = 30;
-
-  for (const col of cols) {
-    const old = Array.from(col.querySelectorAll(".cal-project"));
-    for (const el of old) el.remove();
-  }
-
-  const rangeEnd = addDays(rangeStart, days);
-  const returnUrl = location.pathname + location.search;
-
-  // 1) 日ごとにイベントを集める（開始日基準：現仕様に合わせる）
-  const byDay = new Map(); // dayKey -> { colEl, events: [] }
-
-  for (const p of projects) {
-    const sRaw = p.usage_start_at ?? p.usage_start;
-    const eRaw = p.usage_end_at ?? p.usage_end;
-
-    const s = parseIsoZ(sRaw);
-    const e = parseIsoZ(eRaw);
-    if (!s || !e) continue;
-
-    if (e <= rangeStart || s >= rangeEnd) continue;
-
-    const dayKey = startOfDay(s).toISOString().slice(0, 10);
-    const col = cols.find(c => c.dataset.date === dayKey);
-    if (!col) continue;
-
-    const dayStart = startOfDay(s);
-
-    const startMin = clamp(minutesFromDayStart(s, dayStart), 0, 24 * 60);
-    const endMin = clamp(minutesFromDayStart(e, dayStart), 0, 24 * 60);
-
-    if (!byDay.has(dayKey)) byDay.set(dayKey, { colEl: col, events: [] });
-    byDay.get(dayKey).events.push({ p, startMin, endMin });
-  }
-
-  // 2) 日ごとに重なりレイアウトを計算して描画
-  for (const { colEl, events } of byDay.values()) {
-    const laid = layoutOverlaps(events.map(e => ({
-      p: e.p,
-      startMin: e.startMin,
-      endMin: e.endMin,
-      colIndex: 0,
-      colCount: 1
-    })));
-
-    const innerW = Math.max(0, colEl.clientWidth - 12); // 左右6pxを引いた内側
-    const gap = 6;
-
-    for (const e of laid) {
-      const p = e.p;
-
-      const top = Math.floor(e.startMin / minutesPerCell) * cellH + (e.startMin % minutesPerCell) * (cellH / minutesPerCell);
-      const height = Math.max(10, (e.endMin - e.startMin) * (cellH / minutesPerCell));
-
-      const colsCount = Math.max(1, e.colCount);
-      const idx = Math.max(0, e.colIndex);
-
-      const w = colsCount === 1 ? innerW : Math.max(40, Math.floor((innerW - gap * (colsCount - 1)) / colsCount));
-      const left = 6 + idx * (w + gap);
-
-      const block = document.createElement("div");
-      block.className = "cal-project";
-      block.classList.add(p.status || "draft");
-
-      const pid = String(p.id);
-      block.dataset.projectId = pid;
-
-      if (shortageIdSet && shortageIdSet.has(pid)) {
-        block.classList.add("cal-project--shortage");
-      }
-
-      block.style.top = `${top}px`;
-      block.style.height = `${height}px`;
-
-      // 横並びレイアウト（rightは使わない）
-      block.style.left = `${left}px`;
-      block.style.width = `${w}px`;
-      block.style.right = "auto";
-
-      block.textContent = p.title ?? "(無題)";
-
-      block.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        openProjectModal(p.id, p.title ?? "(無題)", returnUrl);
-      });
-
-      colEl.appendChild(block);
-    }
-  }
-}
-
-function isoDateForInput(d) {
-  const x = startOfDay(d);
-  const y = x.getFullYear();
-  const m = pad2(x.getMonth() + 1);
-  const day = pad2(x.getDate());
-  return `${y}-${m}-${day}`;
-}
-
-let anchorDate = new Date();
-let mode = qs("mode") || "week";
-
-async function load() {
-  clearError();
-
-  setActiveMode(mode);
 
   const datePicker = document.getElementById("datePicker");
-  if (datePicker) datePicker.value = isoDateForInput(anchorDate);
-
-  const range = computeRange(anchorDate, mode);
-
-  buildTimeColumn();
-  buildGridShell(range.start, range.days);
-
-  const projects = await apiJson("/api/projects");
-
-  let shortageIdSet = null;
-  try {
-    shortageIdSet = await computeShortageIdSetForVisibleProjects(projects, range.start, range.days);
-  } catch {
-    shortageIdSet = null;
-  }
-
-  renderProjects(projects, range.start, range.days, shortageIdSet);
-}
-
-function shiftAnchor(dir) {
-  if (mode === "day") anchorDate = addDays(anchorDate, dir * 1);
-  else if (mode === "week") anchorDate = addDays(anchorDate, dir * 7);
-  else if (mode === "2week") anchorDate = addDays(anchorDate, dir * 14);
-  else {
-    const y = anchorDate.getFullYear();
-    const m = anchorDate.getMonth();
-    anchorDate = new Date(y, m + dir, 1);
-  }
-}
-
-function wire() {
   const prevBtn = document.getElementById("prevBtn");
   const nextBtn = document.getElementById("nextBtn");
   const newBtn = document.getElementById("newBtn");
-  const datePicker = document.getElementById("datePicker");
 
-  if (prevBtn) prevBtn.addEventListener("click", () => { shiftAnchor(-1); load().catch(e => showError(e.message)); });
-  if (nextBtn) nextBtn.addEventListener("click", () => { shiftAnchor(1); load().catch(e => showError(e.message)); });
-
-  if (newBtn) newBtn.addEventListener("click", () => {
-    const returnUrl = location.pathname + location.search;
-    location.href = `/project-new.html?return=${encodeURIComponent(returnUrl)}`;
-  });
-
-  if (datePicker) {
-    datePicker.addEventListener("change", () => {
-      const v = datePicker.value;
-      if (!v) return;
-      const [y,m,d] = v.split("-").map(Number);
-      anchorDate = new Date(y, m - 1, d);
-      load().catch(e => showError(e.message));
-    });
+  if (!daysHeader || !timeCol || !daysGrid) {
+    console.error("[calendar.js] required containers not found");
+    return;
   }
 
-  for (const id of ["modeDay","modeWeek","mode2Week","modeMonth"]) {
-    const btn = document.getElementById(id);
-    if (!btn) continue;
-    btn.addEventListener("click", () => {
-      mode = btn.getAttribute("data-mode");
-      setQs("mode", mode);
-      load().catch(e => showError(e.message));
-    });
+  function showError(msg) {
+    if (errorText) errorText.textContent = msg || "";
   }
 
-  // 画面幅が変わると横並びのpx計算がズレるので再描画
-  window.addEventListener("resize", () => {
-    load().catch(()=>{});
-  });
-}
+  const qp = new URLSearchParams(location.search);
+  const mode = (qp.get("mode") || "week").toLowerCase();
+  const baseDateStr = qp.get("date");
 
-wire();
-load().catch(err => showError(err.message));
+  const dtfYMD = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  });
+
+  const dtfYMDHM = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  });
+
+  function partsFromDateInJst(dateObj, withTime) {
+    const parts = (withTime ? dtfYMDHM : dtfYMD).formatToParts(dateObj);
+    const m = Object.create(null);
+    for (const p of parts) if (p.type !== "literal") m[p.type] = p.value;
+    return {
+      y: Number(m.year), mo: Number(m.month), d: Number(m.day),
+      hh: withTime ? Number(m.hour) : 0, mm: withTime ? Number(m.minute) : 0,
+    };
+  }
+
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function toDayKey(y, mo, d) { return `${y}-${pad2(mo)}-${pad2(d)}`; }
+
+  function jstDayKeyFromUtcMs(utcMs) {
+    const p = partsFromDateInJst(new Date(utcMs), false);
+    return toDayKey(p.y, p.mo, p.d);
+  }
+
+  function jstTodayKey() { return jstDayKeyFromUtcMs(Date.now()); }
+
+  function jstMidnightUtcMs(dayKey) {
+    const [y, mo, d] = dayKey.split("-").map(Number);
+    return Date.UTC(y, mo - 1, d, -9, 0, 0, 0);
+  }
+
+  function addJstDays(dayKey, deltaDays) {
+    const ms = jstMidnightUtcMs(dayKey) + deltaDays * 86400000;
+    return jstDayKeyFromUtcMs(ms);
+  }
+
+  function weekdayIndexInJstFromDayKey(dayKey) {
+    return new Date(jstMidnightUtcMs(dayKey)).getUTCDay();
+  }
+
+  function startOfWeekMonday(dayKey) {
+    const w = weekdayIndexInJstFromDayKey(dayKey);
+    const diff = (w === 0 ? -6 : 1 - w);
+    return addJstDays(dayKey, diff);
+  }
+
+  function getRangeDays(modeName, baseKey) {
+    if (modeName === "day") return [baseKey];
+    const startKey = startOfWeekMonday(baseKey);
+    if (modeName === "2week" || modeName === "2weeks") {
+      return Array.from({ length: 14 }, (_, i) => addJstDays(startKey, i));
+    }
+    if (modeName === "month") {
+      const [y, mo] = baseKey.split("-").map(Number);
+      const first = `${y}-${pad2(mo)}-01`;
+      const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+      return Array.from({ length: daysInMonth }, (_, i) => addJstDays(first, i));
+    }
+    return Array.from({ length: 7 }, (_, i) => addJstDays(startKey, i));
+  }
+
+  function jstHmFromUtcDate(dateObjUtc) {
+    const p = partsFromDateInJst(dateObjUtc, true);
+    return { hh: p.hh, mm: p.mm };
+  }
+
+  function minutesFromJstHm(hh, mm) { return hh * 60 + mm; }
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+  function clearChildren(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+  function buildTimeCol() {
+    clearChildren(timeCol);
+    for (let m = 0; m < DAY_MIN; m += SLOT_MIN) {
+      const slot = document.createElement("div");
+      slot.className = "cal-time-slot";
+      if (m % 60 === 0) {
+        slot.classList.add("is-hour");
+        slot.textContent = `${pad2(Math.floor(m / 60))}:00`;
+      }
+      timeCol.appendChild(slot);
+    }
+  }
+
+  function buildDaysHeader(days) {
+    clearChildren(daysHeader);
+    for (const dayKey of days) {
+      const [y, mo, d] = dayKey.split("-").map(Number);
+      const w = weekdayIndexInJstFromDayKey(dayKey);
+      const wd = ["日", "月", "火", "水", "木", "金", "土"][w];
+      const head = document.createElement("div");
+      head.className = "cal-day-head";
+      if (w === 6) head.classList.add("is-sat");
+      if (w === 0) head.classList.add("is-sun");
+      head.textContent = `${mo}/${d}(${wd})`;
+      daysHeader.appendChild(head);
+    }
+  }
+
+  function buildDaysGrid(days) {
+    clearChildren(daysGrid);
+    for (const dayKey of days) {
+      const col = document.createElement("div");
+      col.className = "cal-day-col";
+      col.dataset.day = dayKey;
+      const w = weekdayIndexInJstFromDayKey(dayKey);
+      if (w === 6) col.classList.add("is-sat");
+      if (w === 0) col.classList.add("is-sun");
+      for (let m = 0; m < DAY_MIN; m += SLOT_MIN) {
+        const line = document.createElement("div");
+        line.className = "cal-slot-line";
+        if (m % 60 === 0) line.classList.add("hour");
+        col.appendChild(line);
+      }
+      daysGrid.appendChild(col);
+    }
+  }
+
+  function setActiveModeBtn(m) {
+    for (const k of Object.keys(modeBtns)) {
+      const b = modeBtns[k];
+      if (!b) continue;
+      b.classList.toggle("is-active", k === m);
+    }
+  }
+
+  function navigateTo(newMode, newDateKey) {
+    const u = new URL(location.href);
+    u.searchParams.set("mode", newMode);
+    u.searchParams.set("date", newDateKey);
+    location.href = u.pathname + "?" + u.searchParams.toString();
+  }
+
+  async function fetchProjects() {
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch("/api/projects", { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+    const text = await res.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch {}
+    if (!res.ok) {
+      const msg = (json && (json.error || json.message)) || text || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return Array.isArray(json) ? json : (json && json.value) ? json.value : (json && json.projects) ? json.projects : [];
+  }
+
+  async function fetchShortages(days) {
+    try {
+      const from = jstMidnightUtcMs(days[0]);
+      const to = jstMidnightUtcMs(days[days.length - 1]) + 86400000;
+      const fromIso = new Date(from).toISOString();
+      const toIso = new Date(to).toISOString();
+      const res = await fetch(
+        `/api/shortages?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+        { headers: { Accept: "application/json" } }
+      );
+      if (!res.ok) return new Map();
+      const json = await res.json();
+      const map = new Map();
+      for (const s of (json.projects || [])) {
+        map.set(s.project_id, s.shortage);
+      }
+      return map;
+    } catch (e) {
+      console.warn("shortage取得失敗:", e);
+      return new Map();
+    }
+  }
+
+  function layoutOverlaps(segs) {
+    const active = [];
+    const result = [];
+    let cluster = [];
+    let clusterMaxEnd = -1;
+
+    function flushCluster() {
+      if (!cluster.length) return;
+      let colCount = 1;
+      for (const r of cluster) colCount = Math.max(colCount, r.colIndex + 1);
+      for (const r of cluster) r.colCount = colCount;
+      cluster = [];
+      clusterMaxEnd = -1;
+    }
+
+    for (const s of segs) {
+      for (let i = active.length - 1; i >= 0; i--) {
+        if (active[i].endMin <= s.startMin) active.splice(i, 1);
+      }
+      const used = new Set(active.map((a) => a.colIndex));
+      let colIndex = 0;
+      while (used.has(colIndex)) colIndex++;
+      const placed = { ...s, colIndex, colCount: 1 };
+      active.push({ endMin: s.endMin, colIndex });
+      if (!cluster.length) {
+        clusterMaxEnd = s.endMin;
+      } else {
+        if (s.startMin >= clusterMaxEnd) {
+          flushCluster();
+          clusterMaxEnd = s.endMin;
+        } else {
+          clusterMaxEnd = Math.max(clusterMaxEnd, s.endMin);
+        }
+      }
+      cluster.push(placed);
+      result.push(placed);
+    }
+    flushCluster();
+    return result;
+  }
+
+  function clearProjectBlocks() {
+    document.querySelectorAll(".cal-project").forEach((el) => el.remove());
+  }
+
+  function renderProjects(projects, visibleDays, shortageMap = new Map()) {
+    clearProjectBlocks();
+    const visibleSet = new Set(visibleDays);
+    const segmentsByDay = new Map();
+
+    for (const p of projects) {
+      const id = p.id;
+      const title = p.title || "(no title)";
+      const status = p.status || "draft";
+      const shortage = shortageMap.has(p.id) ? shortageMap.get(p.id) : Boolean(p.shortage) || Boolean(p.is_shortage);
+      const startIso = p.usage_start_at || p.usage_start;
+      const endIso = p.usage_end_at || p.usage_end;
+      if (!startIso || !endIso) continue;
+      const startUtc = new Date(startIso);
+      const endUtc = new Date(endIso);
+      if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endUtc.getTime())) continue;
+      const startDayKey = jstDayKeyFromUtcMs(startUtc.getTime());
+      const endDayKey = jstDayKeyFromUtcMs(endUtc.getTime());
+      const startHm = jstHmFromUtcDate(startUtc);
+      const endHm = jstHmFromUtcDate(endUtc);
+      let startMin = minutesFromJstHm(startHm.hh, startHm.mm);
+      let endMin = minutesFromJstHm(endHm.hh, endHm.mm);
+      if (startDayKey === endDayKey && endMin <= startMin) {
+        endMin = clamp(startMin + SLOT_MIN, 0, DAY_MIN);
+      }
+      let dayKey = startDayKey;
+      while (true) {
+        const isFirst = dayKey === startDayKey;
+        const isLast = dayKey === endDayKey;
+        const segStart = isFirst ? startMin : 0;
+        const segEnd = isLast ? endMin : DAY_MIN;
+        if (visibleSet.has(dayKey)) {
+          const seg = {
+            id, title, status, shortage, dayKey,
+            startMin: clamp(segStart, 0, DAY_MIN),
+            endMin: clamp(segEnd, 0, DAY_MIN),
+            color_key: p.color_key || null,
+          };
+          if (seg.endMin > seg.startMin) {
+            if (!segmentsByDay.has(dayKey)) segmentsByDay.set(dayKey, []);
+            segmentsByDay.get(dayKey).push(seg);
+          }
+        }
+        if (isLast) break;
+        dayKey = addJstDays(dayKey, 1);
+      }
+    }
+
+    for (const dayKey of visibleDays) {
+      const col = daysGrid.querySelector(`.cal-day-col[data-day="${dayKey}"]`);
+      if (!col) continue;
+      const segs = (segmentsByDay.get(dayKey) || [])
+        .slice()
+        .sort((a, b) => (a.startMin - b.startMin) || (a.endMin - b.endMin) || (a.id - b.id));
+      const laidOut = layoutOverlaps(segs);
+      for (const s of laidOut) {
+        const el = document.createElement("div");
+        el.className = "cal-project";
+        el.classList.add(String(s.status));
+        if (s.shortage) el.classList.add("cal-project--shortage");
+        if (s.color_key) el.classList.add(`cal-color--${s.color_key}`);
+        el.dataset.id = String(s.id);
+        el.dataset.day = s.dayKey;
+        el.textContent = s.title;
+        const topPct = (s.startMin / DAY_MIN) * 100;
+        const heightPct = ((s.endMin - s.startMin) / DAY_MIN) * 100;
+        const leftPct = (s.colIndex / s.colCount) * 100;
+        const widthPct = (1 / s.colCount) * 100;
+        el.style.top = `${topPct}%`;
+        el.style.height = `${heightPct}%`;
+        el.style.left = `calc(${leftPct}% + ${GUTTER_PX}px)`;
+        el.style.width = `calc(${widthPct}% - ${GUTTER_PX * 2}px)`;
+        el.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const ret = encodeURIComponent(location.pathname + location.search);
+          location.href = `/project-edit.html?id=${encodeURIComponent(String(s.id))}&return=${ret}`;
+        });
+        col.appendChild(el);
+      }
+    }
+  }
+
+  function getBaseDayKey() {
+    if (baseDateStr && /^\d{4}-\d{2}-\d{2}$/.test(baseDateStr)) return baseDateStr;
+    return jstTodayKey();
+  }
+
+  async function main() {
+    try {
+      showError("");
+      const baseKey = getBaseDayKey();
+      const days = getRangeDays(mode, baseKey);
+      setActiveModeBtn(mode);
+      if (datePicker) datePicker.value = baseKey;
+      buildTimeCol();
+      buildDaysHeader(days);
+      buildDaysGrid(days);
+      if (datePicker) {
+        datePicker.addEventListener("change", () => {
+          const v = datePicker.value;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v)) navigateTo(mode, v);
+        });
+      }
+      Object.entries(modeBtns).forEach(([k, btn]) => {
+        if (!btn) return;
+        btn.addEventListener("click", () => navigateTo(k, baseKey));
+      });
+      prevBtn && prevBtn.addEventListener("click", () => {
+        const step = mode === "day" ? -1 : mode === "2week" ? -14 : mode === "month" ? -30 : -7;
+        navigateTo(mode, addJstDays(baseKey, step));
+      });
+      nextBtn && nextBtn.addEventListener("click", () => {
+        const step = mode === "day" ? 1 : mode === "2week" ? 14 : mode === "month" ? 30 : 7;
+        navigateTo(mode, addJstDays(baseKey, step));
+      });
+      newBtn && newBtn.addEventListener("click", () => {
+        const ret = encodeURIComponent(location.pathname + location.search);
+        location.href = `/project-new.html?return=${ret}`;
+      });
+      const [projects, shortageMap] = await Promise.all([
+        fetchProjects(),
+        fetchShortages(days),
+      ]);
+      renderProjects(projects, days, shortageMap);
+
+      // 7:00の位置にスクロール（上にスクロールで0:00も見られる）
+      const slot7 = document.querySelector(".cal-time-slot");
+      if (slot7) {
+        const slotH7 = slot7.getBoundingClientRect().height || 28;
+        window.scrollTo({ top: slotH7 * 14 * 2, behavior: "instant" });
+      }
+    } catch (e) {
+      console.error(e);
+      showError(String(e.message || e));
+    }
+  }
+
+  main();
+})();
