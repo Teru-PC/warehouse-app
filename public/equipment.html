@@ -65,17 +65,42 @@
       </div>
       <div>
         <label>画像（任意）</label>
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <button class="btn" id="uploadTabBtn" style="flex:1;">ファイルを選択</button>
-          <button class="btn" id="urlTabBtn" style="flex:1;">URLで入力</button>
+        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+          <button class="btn" id="uploadTabBtn" style="flex:1;">📁 ファイル選択</button>
+          <button class="btn" id="cameraTabBtn" style="flex:1;">📷 カメラ撮影</button>
+          <button class="btn" id="urlTabBtn" style="flex:1;">🔗 URL入力</button>
         </div>
+
+        <!-- ファイル選択 -->
         <div id="uploadArea">
           <input id="fImageFile" type="file" accept="image/*" style="width:100%;" />
           <div id="uploadProgress" style="font-size:12px; color:#6b7280; margin-top:4px;"></div>
         </div>
+
+        <!-- カメラ撮影 -->
+        <div id="cameraArea" style="display:none;">
+          <video id="cameraVideo" style="width:100%; border-radius:10px; display:none;" autoplay playsinline></video>
+          <canvas id="cameraCanvas" style="display:none;"></canvas>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn" id="startCameraBtn" style="flex:1;">📷 カメラ起動</button>
+            <button class="btn" id="shootBtn" style="flex:1; display:none;">📸 撮影</button>
+          </div>
+          <div id="confirmArea" style="display:none; margin-top:8px;">
+            <img id="capturedImg" style="width:100%; border-radius:10px; margin-bottom:8px;" />
+            <div style="font-size:13px; color:#374151; margin-bottom:8px; text-align:center;">この画像でよろしいですか？</div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn" id="retakeBtn" style="flex:1;">🔄 再撮影</button>
+              <button class="btn btn-primary" id="confirmBtn" style="flex:1;">✅ OK</button>
+            </div>
+          </div>
+          <div id="cameraProgress" style="font-size:12px; color:#6b7280; margin-top:4px;"></div>
+        </div>
+
+        <!-- URL入力 -->
         <div id="urlArea" style="display:none;">
           <input id="fImageUrl" type="url" placeholder="https://..." />
         </div>
+
         <img id="imgPreview" class="img-preview" style="margin-top:8px;" />
       </div>
       <div id="modalErr" class="err"></div>
@@ -156,13 +181,89 @@
     }
 
     // タブ切り替え
-    document.getElementById('uploadTabBtn').addEventListener('click', () => {
-      document.getElementById('uploadArea').style.display = 'block';
-      document.getElementById('urlArea').style.display = 'none';
+    function showTab(tab) {
+      document.getElementById('uploadArea').style.display = tab === 'upload' ? 'block' : 'none';
+      document.getElementById('cameraArea').style.display = tab === 'camera' ? 'block' : 'none';
+      document.getElementById('urlArea').style.display = tab === 'url' ? 'block' : 'none';
+      if (tab !== 'camera') stopCamera();
+    }
+    document.getElementById('uploadTabBtn').addEventListener('click', () => showTab('upload'));
+    document.getElementById('cameraTabBtn').addEventListener('click', () => showTab('camera'));
+    document.getElementById('urlTabBtn').addEventListener('click', () => showTab('url'));
+
+    // カメラ機能
+    let cameraStream = null;
+
+    function stopCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+      }
+      const video = document.getElementById('cameraVideo');
+      video.style.display = 'none';
+      document.getElementById('shootBtn').style.display = 'none';
+      document.getElementById('confirmArea').style.display = 'none';
+    }
+
+    document.getElementById('startCameraBtn').addEventListener('click', async () => {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const video = document.getElementById('cameraVideo');
+        video.srcObject = cameraStream;
+        video.style.display = 'block';
+        document.getElementById('shootBtn').style.display = 'block';
+        document.getElementById('confirmArea').style.display = 'none';
+        document.getElementById('cameraProgress').textContent = '';
+      } catch (e) {
+        document.getElementById('cameraProgress').textContent = 'カメラの起動に失敗しました';
+      }
     });
-    document.getElementById('urlTabBtn').addEventListener('click', () => {
-      document.getElementById('uploadArea').style.display = 'none';
-      document.getElementById('urlArea').style.display = 'block';
+
+    document.getElementById('shootBtn').addEventListener('click', () => {
+      const video = document.getElementById('cameraVideo');
+      const canvas = document.getElementById('cameraCanvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      document.getElementById('capturedImg').src = dataUrl;
+      video.style.display = 'none';
+      document.getElementById('shootBtn').style.display = 'none';
+      document.getElementById('confirmArea').style.display = 'block';
+    });
+
+    document.getElementById('retakeBtn').addEventListener('click', () => {
+      const video = document.getElementById('cameraVideo');
+      video.style.display = 'block';
+      document.getElementById('shootBtn').style.display = 'block';
+      document.getElementById('confirmArea').style.display = 'none';
+    });
+
+    document.getElementById('confirmBtn').addEventListener('click', async () => {
+      const progress = document.getElementById('cameraProgress');
+      progress.textContent = 'アップロード中...';
+      try {
+        const dataUrl = document.getElementById('capturedImg').src;
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], 'camera.jpg', { type: 'image/jpeg' });
+        const formData = new FormData();
+        formData.append('image', file);
+        const res = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${getToken()}` },
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'アップロード失敗');
+        fImageUrl.value = data.url;
+        document.getElementById('imgPreview').src = data.url;
+        document.getElementById('imgPreview').style.display = 'block';
+        progress.textContent = 'アップロード完了！';
+        stopCamera();
+        showTab('upload');
+      } catch (e) {
+        progress.textContent = 'エラー: ' + e.message;
+      }
     });
 
     // ファイル選択時にCloudinaryへアップロード
@@ -216,6 +317,7 @@
 
     function closeModal() {
       modalOverlay.classList.remove('active');
+      stopCamera();
     }
 
     function updatePreview() {
