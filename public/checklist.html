@@ -7,88 +7,67 @@
   <title>チェックリスト</title>
   <link rel="stylesheet" href="/css/style.css" />
   <style>
-    body { font-family: sans-serif; padding: 16px; max-width: 600px; margin: 0 auto; }
+    body { font-family: sans-serif; padding: 16px; max-width: 700px; margin: 0 auto; }
     h1 { font-size: 20px; margin-bottom: 4px; }
     .project-info { color: #6b7280; font-size: 14px; margin-bottom: 16px; }
-
-    .progress-wrap {
-      background: #e5e7eb;
-      border-radius: 999px;
-      height: 12px;
-      margin-bottom: 20px;
-      overflow: hidden;
-    }
-    .progress-bar {
-      height: 100%;
-      background: #22c55e;
-      border-radius: 999px;
-      transition: width 0.3s;
-    }
-    .progress-label {
-      text-align: right;
-      font-size: 13px;
-      color: #6b7280;
-      margin-top: 4px;
-      margin-bottom: 20px;
-    }
-
+    .progress-wrap { background: #e5e7eb; border-radius: 999px; height: 12px; margin-bottom: 4px; overflow: hidden; }
+    .progress-bar { height: 100%; background: #22c55e; border-radius: 999px; transition: width 0.3s; }
+    .progress-label { text-align: right; font-size: 13px; color: #6b7280; margin-bottom: 16px; }
     .checklist { list-style: none; padding: 0; margin: 0; }
     .checklist-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 12px;
-      border-bottom: 1px solid #e5e7eb;
-      cursor: pointer;
-      border-radius: 8px;
-      transition: background 0.15s;
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-bottom: 1px solid #e5e7eb;
+      cursor: pointer; border-radius: 8px; transition: background 0.15s;
     }
     .checklist-item:hover { background: #f9fafb; }
     .checklist-item.is-checked { background: #f0fdf4; }
-
     .check-box {
-      width: 24px;
-      height: 24px;
-      border: 2px solid #d1d5db;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      font-size: 16px;
-      transition: all 0.15s;
+      width: 24px; height: 24px; border: 2px solid #d1d5db;
+      border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; font-size: 16px; transition: all 0.15s;
     }
-    .is-checked .check-box {
-      background: #22c55e;
-      border-color: #22c55e;
-      color: #fff;
+    .is-checked .check-box { background: #22c55e; border-color: #22c55e; color: #fff; }
+    .item-img {
+      width: 40px; height: 40px; object-fit: contain;
+      border-radius: 6px; background: #f3f4f6; flex-shrink: 0;
     }
-
+    .item-img-placeholder {
+      width: 40px; height: 40px; border-radius: 6px;
+      background: #f3f4f6; flex-shrink: 0;
+    }
     .item-info { flex: 1; }
     .item-name { font-weight: 700; font-size: 15px; }
     .item-qty { font-size: 13px; color: #6b7280; margin-top: 2px; }
-
+    .item-fixed { font-size: 11px; color: #9ca3af; }
+    .section-label {
+      font-size: 12px; font-weight: 700; color: #6b7280;
+      padding: 8px 12px 4px; background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb; margin-top: 8px;
+    }
     .btn-back {
-      display: inline-block;
-      margin-bottom: 16px;
-      padding: 8px 16px;
-      background: #f3f4f6;
-      border-radius: 8px;
-      text-decoration: none;
-      color: #111827;
-      font-weight: 600;
-      font-size: 14px;
+      display: inline-block; margin-bottom: 16px; padding: 8px 16px;
+      background: #f3f4f6; border-radius: 8px; text-decoration: none;
+      color: #111827; font-weight: 600; font-size: 14px;
     }
     .btn-back:hover { background: #e5e7eb; }
-
+    .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .btn-tool {
+      padding: 8px 14px; border-radius: 8px; border: 1px solid #e5e7eb;
+      background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; color: #111827;
+    }
+    .btn-tool:hover { background: #f3f4f6; }
     .empty { color: #9ca3af; text-align: center; padding: 40px 0; }
     .error-msg { color: #b91c1c; margin-bottom: 12px; }
+
+    @media print {
+      .btn-back, .toolbar { display: none; }
+      body { padding: 8px; }
+    }
   </style>
 </head>
 <body>
 
   <a id="backBtn" href="#" class="btn-back">← 案件編集に戻る</a>
-
   <h1>チェックリスト</h1>
   <div id="projectInfo" class="project-info"></div>
   <p id="errorMsg" class="error-msg"></p>
@@ -98,22 +77,38 @@
   </div>
   <div id="progressLabel" class="progress-label">0 / 0 完了</div>
 
+  <div class="toolbar">
+    <button class="btn-tool" id="printBtn">🖨️ 印刷</button>
+    <button class="btn-tool" id="csvBtn">📥 CSV書き出し</button>
+  </div>
+
   <ul id="checklist" class="checklist"></ul>
 
   <script>
+    const FIXED_ITEMS = [
+      '表示板セット',
+      '養生テープ',
+      'ガムテープ（黒）',
+      'キャプタイヤ',
+      '電源タップ',
+      'アッテネーター（20db/40db）',
+      '変換プラグ（オス-オス/メス-メス）',
+    ];
+
     const qp = new URLSearchParams(location.search);
     const projectId = qp.get('project_id');
     const returnUrl = qp.get('return') || '/calendar.html';
 
-    // 戻るボタン
     document.getElementById('backBtn').href =
       `/project-edit.html?id=${projectId}&return=${encodeURIComponent(returnUrl)}`;
+
+    function getToken() { return localStorage.getItem('token') || ''; }
+    const authHeader = { Authorization: `Bearer ${getToken()}` };
 
     function showError(msg) {
       document.getElementById('errorMsg').textContent = msg || '';
     }
 
-    // 進捗バー更新
     function updateProgress(items) {
       const total = items.length;
       const done = items.filter(i => i.checked).length;
@@ -122,9 +117,15 @@
       document.getElementById('progressLabel').textContent = `${done} / ${total} 完了（${pct}%）`;
     }
 
-    // チェック切り替え
     async function toggleCheck(item, el) {
       const newChecked = !item.checked;
+      if (item.fixed) {
+        item.checked = newChecked;
+        el.classList.toggle('is-checked', newChecked);
+        el.querySelector('.check-box').textContent = newChecked ? '✓' : '';
+        updateProgress(currentItems);
+        return;
+      }
       try {
         const res = await fetch(`/api/project-items/${item.id}/check`, {
           method: 'PATCH',
@@ -143,55 +144,74 @@
 
     let currentItems = [];
 
-    // リスト描画
-    function renderList(items) {
-      currentItems = items;
+    function createItem(item) {
+      const li = document.createElement('li');
+      li.className = 'checklist-item' + (item.checked ? ' is-checked' : '');
+
+      // 画像
+      let imgHtml = '';
+      if (item.image_url) {
+        imgHtml = `<img class="item-img" src="${item.image_url}" alt="" onerror="this.style.display='none'" />`;
+      } else {
+        imgHtml = `<div class="item-img-placeholder"></div>`;
+      }
+
+      li.innerHTML = `
+        <div class="check-box">${item.checked ? '✓' : ''}</div>
+        ${imgHtml}
+        <div class="item-info">
+          <div class="item-name">${item.equipment_name}</div>
+          <div class="item-qty">${item.fixed ? '固定備品' : `数量：${item.quantity}`}</div>
+        </div>
+      `;
+      li.addEventListener('click', () => toggleCheck(item, li));
+      return li;
+    }
+
+    function renderList(dbItems) {
+      // 固定アイテムを追加
+      const fixedItems = FIXED_ITEMS.map(name => ({
+        id: null, equipment_name: name, quantity: 1,
+        checked: false, fixed: true, image_url: null,
+      }));
+
+      currentItems = [...dbItems, ...fixedItems];
       const ul = document.getElementById('checklist');
       ul.innerHTML = '';
 
-      if (items.length === 0) {
+      if (currentItems.length === 0) {
         ul.innerHTML = '<li class="empty">機材が登録されていません</li>';
         return;
       }
 
-      for (const item of items) {
-        const li = document.createElement('li');
-        li.className = 'checklist-item' + (item.checked ? ' is-checked' : '');
-
-        li.innerHTML = `
-          <div class="check-box">${item.checked ? '✓' : ''}</div>
-          <div class="item-info">
-            <div class="item-name">${item.equipment_name}</div>
-            <div class="item-qty">数量：${item.quantity}</div>
-          </div>
-        `;
-
-        li.addEventListener('click', () => toggleCheck(item, li));
-        ul.appendChild(li);
+      // 案件機材セクション
+      if (dbItems.length > 0) {
+        const label1 = document.createElement('div');
+        label1.className = 'section-label';
+        label1.textContent = '📦 案件機材';
+        ul.appendChild(label1);
+        for (const item of dbItems) ul.appendChild(createItem(item));
       }
 
-      updateProgress(items);
+      // 固定備品セクション
+      const label2 = document.createElement('div');
+      label2.className = 'section-label';
+      label2.textContent = '🔧 固定備品';
+      ul.appendChild(label2);
+      for (const item of fixedItems) ul.appendChild(createItem(item));
+
+      updateProgress(currentItems);
     }
 
-    // データ取得
-    function getToken() { return localStorage.getItem('token') || ''; }
-    const authHeader = { Authorization: `Bearer ${getToken()}` };
-
     async function load() {
-      if (!projectId) {
-        showError('project_id が指定されていません');
-        return;
-      }
+      if (!projectId) { showError('project_id が指定されていません'); return; }
       try {
-        // 案件情報
         const pRes = await fetch(`/api/projects/${projectId}`, { headers: authHeader });
         if (pRes.ok) {
           const p = await pRes.json();
-          document.getElementById('projectInfo').textContent =
-            `${p.title || ''}　${p.venue || ''}`;
+          document.getElementById('projectInfo').textContent = `${p.title || ''}　${p.venue || ''}`;
+          document.title = `チェックリスト - ${p.title || ''}`;
         }
-
-        // チェックリスト
         const res = await fetch(`/api/project-items/detail?project_id=${projectId}`, { headers: authHeader });
         if (!res.ok) throw new Error('取得失敗');
         const data = await res.json();
@@ -200,6 +220,29 @@
         showError('データの取得に失敗しました：' + e.message);
       }
     }
+
+    // 印刷
+    document.getElementById('printBtn').addEventListener('click', () => window.print());
+
+    // CSV書き出し
+    document.getElementById('csvBtn').addEventListener('click', () => {
+      const rows = [['機材名', '数量/種別', 'チェック']];
+      for (const item of currentItems) {
+        rows.push([
+          item.equipment_name,
+          item.fixed ? '固定備品' : `${item.quantity}`,
+          item.checked ? '✓' : '',
+        ]);
+      }
+      const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `checklist_${projectId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
 
     load();
   </script>
