@@ -230,3 +230,35 @@
   .cal-days-grid{ grid-auto-columns:minmax(80px,1fr); }
   .cal-day-head{ font-size:11px; padding:6px 4px; }
 }
+
+
+.cal-ship-btn-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 4px;
+}
+
+.cal-ship-btn {
+  display: block;
+  width: 100%;
+  background: #fecaca;
+  border: 1px solid #f87171;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7f1d1d;
+  padding: 3px 6px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 28px;
+  line-height: 22px;
+  box-sizing: border-box;
+}
+
+.cal-ship-btn:hover {
+  background: #fca5a5;
+}
