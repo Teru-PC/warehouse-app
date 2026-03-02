@@ -1,365 +1,232 @@
-/* calendar.js（cal-*）に合わせたCSS */
+/* =========================================================
+   Calendar CSS 完全版
+   ========================================================= */
 
-/* 30分1マスの高さ：JSが --cell-h を読む */
-:root {
-  --cell-h: 28px;
+:root{
+  --cell-h:28px;
+  --line-hour:#9ca3af;
+  --line-half:#e5e7eb;
+  --text-main:#111827;
+  --text-sub:#6b7280;
 }
 
-/* カレンダー枠 */
-#gridRoot {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
-  overflow: hidden;
+#gridRoot{
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  background:#fff;
+  overflow:visible;
 }
 
-/* ===== 上部（タイトル + モード/日付） ===== */
-.cal-topbar {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  margin-bottom: 8px;
+.cal-topbar{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-bottom:8px;
+  padding-top:64px;
 }
 
-.cal-title {
-  font-size: 18px;
-  margin: 0;
+.cal-title{ font-size:18px; margin:0; }
+
+.cal-controls{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
 }
 
-/* モードボタン＋日付入力：中央寄せ */
-.cal-controls {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.cal-mode-btn{
+  border:0;
+  background:transparent;
+  font-weight:600;
+  font-size:17px;
+  padding:10px;
+  border-radius:12px;
+  cursor:pointer;
 }
 
-/* モードボタン：選択中だけ青、他は文字のみ */
-.cal-mode-btn {
-  border: 0;
-  background: transparent;
-  color: #111827;
-  font-weight: 600;
+.cal-mode-btn.is-active{ background:#2563eb; color:#fff; }
 
-  /* 2割程度大きく */
-  font-size: 17px;
-  padding: 10px 10px;
-  border-radius: 12px;
-
-  cursor: pointer;
+.cal-date{
+  padding:10px 12px;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
 }
 
-.cal-mode-btn.is-active {
-  background: #2563eb;
-  color: #fff;
 
-  font-size: 17px;
-  padding: 10px 14px;
-  border-radius: 12px;
+
+#prevBtn{justify-self:start;}
+#nextBtn{justify-self:end;}
+
+.cal-nav-mid{
+  justify-self:center;
+  display:flex;
+  gap:12px;
 }
 
-.cal-date {
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+.cal-nav-btn{
+  width:126px;
+  padding:8px;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:700;
+  font-size:13px;
 }
 
-/* 旧rangeTextは使わないが、残っても崩れないように */
-.cal-range {
-  display: none;
+.cal-error{ color:#b91c1c; min-height:18px; }
+
+.cal-grid-shell{
+  display:grid;
+  grid-template-columns:72px 1fr;
+  grid-template-rows:auto 1fr;
+  min-width:0;
 }
 
-/* ===== ナビ行（戻る / 新規作成 / 進む） ===== */
-/* 3分割グリッドにして「新規作成」を完全中央固定 */
-.cal-nav-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  width: 100%;
-  margin: 6px 0 10px;
-  gap: 12px;
+.cal-corner{
+  grid-column:1;
+  grid-row:1;
+  border-right:1px solid #e5e7eb;
+  border-bottom:1px solid #e5e7eb;
+  background:#fff;
+  position:sticky;
+  top:44px;
+  left:0;
+  z-index:60;
 }
 
-/* 戻る：左寄せ */
-#prevBtn {
-  justify-self: start;
+.cal-days-header{
+  grid-column:2;
+  grid-row:1;
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(120px,1fr);
+  border-bottom:1px solid #e5e7eb;
+  position:sticky;
+  top:44px;
+  z-index:50;
+  background:#fff;
 }
 
-/* 進む：右寄せ */
-#nextBtn {
-  justify-self: end;
+.cal-day-head{
+  padding:10px 8px;
+  border-left:1px solid #e5e7eb;
+  font-weight:700;
 }
 
-/* 中央：新規作成 + エラー */
-.cal-nav-mid {
-  justify-self: center;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.cal-day-head.is-sat{background:#eaf3ff;}
+.cal-day-head.is-sun{background:#ffecec;}
+
+.cal-time-col{
+  grid-column:1;
+  grid-row:2;
+  position:sticky;
+  left:0;
+  z-index:10;
+  background:#fff;
+  border-right:1px solid #e5e7eb;
 }
 
-/* ボタン（戻る/進む/新規作成で共通） */
-.cal-nav-btn {
-  width: 180px;       /* 横幅3倍程度 */
-  max-width: 45vw;    /* 画面が狭い時の保険 */
-  padding: 12px 14px;
-
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #111827;
-  border-radius: 10px;
-  cursor: pointer;
-
-  /* 戻る/進む：太字＋少し大きく */
-  font-weight: 700;
-  font-size: 19px;
+.cal-time-slot{
+  height:var(--cell-h);
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  padding-right:10px;
+  font-size:12px;
+  color:var(--text-sub);
+  position:relative;
+  border:none !important;
 }
 
-.cal-nav-btn:hover {
-  filter: brightness(0.98);
+.cal-time-slot::after{
+  content:"";
+  position:absolute;
+  left:4px;
+  right:4px;
+  top:0;
+  border-top:1px dashed var(--line-half);
 }
 
-/* エラー表示（中央の細い領域） */
-.cal-error {
-  color: #b91c1c;
-  min-height: 18px;
-  margin: 0;
+.cal-time-slot.is-hour{ font-weight:700; color:var(--text-main); }
+.cal-time-slot.is-hour::after{ border-top:2px solid var(--line-hour); }
+
+.cal-days-body{
+  grid-column:2;
+  grid-row:2;
+  overflow-x:auto;
+  overflow-y:hidden;
+}
+.cal-days-grid{
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(120px,1fr);
 }
 
-.cal-error--center {
-  text-align: center;
+.cal-day-col{
+  position:relative;
+  overflow:hidden;
+  border-left:1px solid #e5e7eb;
+  min-height:calc(var(--cell-h) * 48);
+  isolation:isolate;
 }
 
-/* ===== グリッド全体 ===== */
-.cal-grid-shell {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  grid-template-rows: auto 1fr;
-  border-top: 1px solid #e5e7eb;
+.cal-day-col.is-sat{background:#f6fbff;}
+.cal-day-col.is-sun{background:#fff7f7;}
+
+.cal-slot-line{
+  height:var(--cell-h);
+  position:relative;
+  border:none !important;
 }
 
-/* 左上の空き */
-.cal-corner {
-  grid-column: 1;
-  grid-row: 1;
-  border-right: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 6;
+.cal-slot-line::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:0;
+  border-top:1px dashed var(--line-half);
 }
 
-/* 日付ヘッダー（横スクロールに追従） */
-.cal-days-header {
-  grid-column: 2;
-  grid-row: 1;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(160px, 1fr);
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  overflow: hidden;
+.cal-slot-line.hour::before{ border-top:2px solid var(--line-hour); }
+
+.cal-project{
+  position:absolute;
+  border-radius:6px;
+  padding:6px 8px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  box-shadow:none;
+  color:#111827;
+  box-sizing:border-box;
 }
 
-.cal-day-head {
-  padding: 10px 8px;
-  border-left: 1px solid #e5e7eb;
+.cal-project.draft{background:#93c5fd;}
+.cal-project.confirmed{background:#86efac;}
+.cal-project.cancelled{background:#fca5a5;}
 
-  font-family: inherit;
-  font-size: 14.4px;   /* 12px の2割増 */
-  font-weight: 700;    /* 太字 */
-
-  color: #111827;
-  white-space: nowrap;
+.cal-project.cal-project--shortage{
+  box-shadow:0 0 0 3px #dc2626 inset;
 }
 
-/* 日付ヘッダー：土日色 */
-.cal-day-head.is-sat { background: #eaf3ff; }
-.cal-day-head.is-sun { background: #ffecec; }
+.cal-project.cal-color--1{background:#fecaca;}
+.cal-project.cal-color--2{background:#fed7aa;}
+.cal-project.cal-color--3{background:#fef3c7;}
+.cal-project.cal-color--4{background:#d9f99d;}
+.cal-project.cal-color--5{background:#bbf7d0;}
+.cal-project.cal-color--6{background:#a7f3d0;}
+.cal-project.cal-color--7{background:#99f6e4;}
+.cal-project.cal-color--8{background:#a5f3fc;}
+.cal-project.cal-color--9{background:#bae6fd;}
+.cal-project.cal-color--10{background:#c7d2fe;}
+.cal-project.cal-color--11{background:#e9d5ff;}
+.cal-project.cal-color--12{background:#fbcfe8;}
 
-/* 時刻列（縦スクロールに追従） */
-.cal-time-col {
-  grid-column: 1;
-  grid-row: 2;
-  border-right: 1px solid #e5e7eb;
-  background: #fff;
-  overflow: hidden;
-}
-
-.cal-time-slot {
-  height: var(--cell-h);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 10px;
-  font-size: 12px;
-  color: #6b7280;
-  border-bottom: 1px solid #f1f5f9;
-  box-sizing: border-box;
-}
-
-/* 本体（スクロール領域） */
-.cal-days-body {
-  grid-column: 2;
-  grid-row: 2;
-  overflow: auto;
-  max-height: calc(var(--cell-h) * 48 + 2px);
-}
-
-.cal-days-grid {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(160px, 1fr);
-  position: relative;
-}
-
-/* 日ごとの列 */
-.cal-day-col {
-  position: relative;
-  border-left: 1px solid #e5e7eb;
-  min-height: calc(var(--cell-h) * 48);
-}
-
-/* 時間軸（土日を非常に薄く） */
-.cal-day-col.is-sat { background: #f6fbff; }
-.cal-day-col.is-sun { background: #fff7f7; }
-
-.cal-slot-line {
-  height: var(--cell-h);
-  border-bottom: 1px solid #f1f5f9;
-  box-sizing: border-box;
-}
-
-.cal-slot-line.hour {
-  border-bottom: 1px dashed #e5e7eb;
-}
-
-/* 案件ブロック */
-.cal-project {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  border-radius: 10px;
-  padding: 6px 8px;
-  color: #fff;
-  font-size: 12px;
-  line-height: 1.2;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
-.cal-project.draft { background: #2563eb; }
-.cal-project.confirmed { background: #16a34a; }
-.cal-project.cancelled { background: #dc2626; }
-
-/* 不足案件（カレンダー上で赤表示） */
-.cal-project.cal-project--shortage {
-  outline: 3px solid #dc2626;     /* 赤枠 */
-  outline-offset: 0;
-  box-shadow:
-    0 2px 8px rgba(0,0,0,0.08),
-    0 0 0 2px rgba(255,255,255,0.9) inset; /* 赤地でも判別しやすくする */
-}
-
-/* ===== 案件クリック モーダル ===== */
-.cal-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 16px;
-}
-
-.cal-modal-overlay.is-open {
-  display: flex;
-}
-
-.cal-modal {
-  width: min(520px, 96vw);
-  background: #fff;
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
-}
-
-.cal-modal-title {
-  font-weight: 800;
-  font-size: 16px;
-  margin-bottom: 12px;
-}
-
-.cal-modal-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.cal-modal-btn {
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #111827;
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.cal-modal-btn--primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-.cal-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 16px;
-}
-.cal-modal-overlay.is-open { display: flex; }
-.cal-modal {
-  width: min(520px, 96vw);
-  background: #fff;
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
-}
-.cal-modal-title { font-weight: 800; font-size: 16px; margin-bottom: 12px; }
-.cal-modal-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.cal-modal-btn {
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #111827;
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-weight: 700;
-}
-.cal-modal-btn--primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-
-/* 不足：赤枠を太く（グリッドからはみ出さないよう内側に描く） */
-.cal-project.cal-project--shortage {
-  box-shadow:
-    0 2px 8px rgba(0,0,0,0.08),
-    0 0 0 4px #dc2626 inset;  /* ← 太さ：8px（もっと太くしたいなら 10px など） */
-}
-
-.cal-project.cal-project--shortage {
-  padding: 6px 8px; /* 必要なら 8px 10px に増やす */
+@media (max-width:600px){
+  .cal-nav-btn{ width:80px; font-size:11px; padding:6px; }
+  .cal-days-header{ grid-auto-columns:minmax(80px,1fr); }
+  .cal-days-grid{ grid-auto-columns:minmax(80px,1fr); }
+  .cal-day-head{ font-size:11px; padding:6px 4px; }
 }
