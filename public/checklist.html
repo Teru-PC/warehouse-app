@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <script src="/js/auth.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>チェックリスト</title>
@@ -127,7 +128,7 @@
       try {
         const res = await fetch(`/api/project-items/${item.id}/check`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
           body: JSON.stringify({ checked: newChecked }),
         });
         if (!res.ok) throw new Error('更新失敗');
@@ -173,6 +174,9 @@
     }
 
     // データ取得
+    function getToken() { return localStorage.getItem('token') || ''; }
+    const authHeader = { Authorization: `Bearer ${getToken()}` };
+
     async function load() {
       if (!projectId) {
         showError('project_id が指定されていません');
@@ -180,7 +184,7 @@
       }
       try {
         // 案件情報
-        const pRes = await fetch(`/api/projects/${projectId}`);
+        const pRes = await fetch(`/api/projects/${projectId}`, { headers: authHeader });
         if (pRes.ok) {
           const p = await pRes.json();
           document.getElementById('projectInfo').textContent =
@@ -188,7 +192,7 @@
         }
 
         // チェックリスト
-        const res = await fetch(`/api/project-items/detail?project_id=${projectId}`);
+        const res = await fetch(`/api/project-items/detail?project_id=${projectId}`, { headers: authHeader });
         if (!res.ok) throw new Error('取得失敗');
         const data = await res.json();
         renderList(data.items || []);
