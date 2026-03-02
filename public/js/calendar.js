@@ -76,7 +76,8 @@
   }
 
   function weekdayIndexInJstFromDayKey(dayKey) {
-    return new Date(jstMidnightUtcMs(dayKey)).getUTCDay();
+    const [y, mo, d] = dayKey.split("-").map(Number);
+    return new Date(Date.UTC(y, mo - 1, d, 0, 0, 0, 0)).getUTCDay();
   }
 
   function startOfWeekMonday(dayKey) {
