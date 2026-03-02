@@ -48,21 +48,18 @@
 }
 
 .cal-time-corner{
-  position:sticky;
-  top:88px;
   background:#fff;
   border-bottom:1px solid #e5e7eb;
-  z-index:40;
   box-sizing:border-box;
-  min-height:10px;
 }
 
 .cal-time-slot{
   height:var(--cell-h);
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:flex-end;
   padding-right:10px;
+  padding-top:2px;
   font-size:12px;
   color:var(--text-sub);
   position:relative;
