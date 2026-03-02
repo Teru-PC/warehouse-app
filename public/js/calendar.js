@@ -112,6 +112,12 @@
 
   function buildTimeCol() {
     clearChildren(timeCol);
+    // 日付ヘッダーと高さを合わせるコーナー（空白）
+    const corner = document.createElement("div");
+    corner.className = "cal-time-corner";
+    corner.id = "timeCorner";
+    timeCol.appendChild(corner);
+
     for (let m = 0; m < DAY_MIN; m += SLOT_MIN) {
       const slot = document.createElement("div");
       slot.className = "cal-time-slot";
@@ -391,12 +397,14 @@
       buildDaysGrid(days);
       // コーナーの高さを日付ヘッダーに合わせる
       const syncCorner = () => {
-        const headerH = document.getElementById('daysHeader').getBoundingClientRect().height;
-        const corner = document.querySelector('.cal-time-corner');
-        if (corner && headerH > 0) corner.style.height = headerH + 'px';
+        const header = document.getElementById('daysHeader');
+        const corner = document.getElementById('timeCorner');
+        if (!header || !corner) return;
+        const h = header.getBoundingClientRect().height;
+        if (h > 0) corner.style.height = h + 'px';
       };
-      syncCorner();
-      requestAnimationFrame(syncCorner);
+      setTimeout(syncCorner, 50);
+      setTimeout(syncCorner, 200);
       if (datePicker) {
         datePicker.addEventListener("change", () => {
           const v = datePicker.value;
