@@ -10,13 +10,6 @@
   --text-sub:#6b7280;
 }
 
-#gridRoot{
-  border:1px solid #e5e7eb;
-  border-radius:12px;
-  background:#fff;
-  overflow:visible;
-}
-
 .cal-topbar{
   display:flex;
   flex-direction:column;
@@ -122,9 +115,10 @@
   grid-row:2;
   position:sticky;
   left:0;
-  z-index:10;
+  z-index:30;
   background:#fff;
   border-right:1px solid #e5e7eb;
+  min-width:72px;
 }
 
 .cal-time-slot{
@@ -156,6 +150,7 @@
   grid-row:2;
   overflow-x:auto;
   overflow-y:hidden;
+  position:relative;
 }
 .cal-days-grid{
   display:grid;
