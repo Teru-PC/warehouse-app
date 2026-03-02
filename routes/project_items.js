@@ -128,5 +128,63 @@ router.delete("/project-items/:id", auth, async (req, res) => {
     return res.status(500).json({ message: "Failed to delete project item" });
   }
 });
+/**
+ * PATCH /api/project-items/:id/check
+ * body: { checked: true/false }
+ * 機材1件のチェック状態を更新
+ */
+router.patch("/project-items/:id/check", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { checked } = req.body;
+
+    if (typeof checked !== "boolean") {
+      return res.status(400).json({ error: "checked must be boolean" });
+    }
+
+    const result = await db.query(
+      `UPDATE project_items SET checked = $1 WHERE id = $2 RETURNING *`,
+      [checked, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    res.json({ success: true, item: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update check" });
+  }
+});
+
+/**
+ * GET /api/project-items/detail?project_id=1
+ * 機材名も含めて返却（チェックリスト表示用）
+ */
+router.get("/project-items/detail", async (req, res) => {
+  try {
+    const { project_id } = req.query;
+
+    if (!project_id) {
+      return res.status(400).json({ error: "project_id required" });
+    }
+
+    const result = await db.query(
+      `SELECT pi.id, pi.equipment_id, pi.quantity, pi.checked,
+              e.name AS equipment_name
+       FROM project_items pi
+       JOIN equipment e ON e.id = pi.equipment_id
+       WHERE pi.project_id = $1
+       ORDER BY e.name ASC`,
+      [project_id]
+    );
+
+    res.json({ items: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch detail" });
+  }
+});
 
 module.exports = router;
