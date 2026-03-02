@@ -133,7 +133,7 @@ router.delete("/project-items/:id", auth, async (req, res) => {
  * body: { checked: true/false }
  * 機材1件のチェック状態を更新
  */
-router.patch("/project-items/:id/check", async (req, res) => {
+router.patch("/project-items/:id/check", auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { checked } = req.body;
@@ -142,7 +142,7 @@ router.patch("/project-items/:id/check", async (req, res) => {
       return res.status(400).json({ error: "checked must be boolean" });
     }
 
-    const result = await db.query(
+    const result = await pool.query(
       `UPDATE project_items SET checked = $1 WHERE id = $2 RETURNING *`,
       [checked, id]
     );
@@ -162,7 +162,7 @@ router.patch("/project-items/:id/check", async (req, res) => {
  * GET /api/project-items/detail?project_id=1
  * 機材名も含めて返却（チェックリスト表示用）
  */
-router.get("/project-items/detail", async (req, res) => {
+router.get("/project-items/detail", auth, async (req, res) => {
   try {
     const { project_id } = req.query;
 
@@ -170,7 +170,7 @@ router.get("/project-items/detail", async (req, res) => {
       return res.status(400).json({ error: "project_id required" });
     }
 
-    const result = await db.query(
+    const result = await pool.query(
       `SELECT pi.id, pi.equipment_id, pi.quantity, pi.checked,
               e.name AS equipment_name
        FROM project_items pi
