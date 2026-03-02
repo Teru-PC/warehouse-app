@@ -335,77 +335,85 @@
     }
 
     // 発送・返却バー描画
+    function makeBar(col, startMin, endMin, text, color) {
+      if (endMin <= startMin) return;
+      const el = document.createElement('div');
+      el.className = 'cal-ship-bar';
+      el.textContent = text;
+      el.style.cssText = `
+        position:absolute;
+        top:${(startMin/DAY_MIN)*100}%;
+        height:${((endMin-startMin)/DAY_MIN)*100}%;
+        left:2px; right:2px;
+        background:${color};
+        border-radius:4px;
+        font-size:10px;
+        font-weight:700;
+        color:#92400e;
+        padding:2px 4px;
+        pointer-events:none;
+        z-index:0;
+        box-sizing:border-box;
+        overflow:hidden;
+        white-space:nowrap;
+        text-overflow:ellipsis;
+      `;
+      col.appendChild(el);
+    }
+
+    const SHIP_COLOR = 'rgba(254,240,138,0.75)'; // 薄い黄色
+
     for (const p of projects) {
       const startIso = p.usage_start_at || p.usage_start;
+      const endIso = p.usage_end_at || p.usage_end;
       const shippingDate = p.shipping_date;
       const returnDueDate = p.return_due_date;
-      if (!startIso) continue;
+      const title = p.title || '';
 
-      const statusColor = {
-        draft: 'rgba(147,197,253,0.5)',
-        confirmed: 'rgba(134,239,172,0.5)',
-        cancelled: 'rgba(252,165,165,0.5)',
-      };
-      const color = statusColor[p.status || 'draft'] || 'rgba(200,200,200,0.5)';
-
-      // 発送バー: 発送日18:00 〜 案件開始
+      // 発送バー
       if (shippingDate) {
         const shipDayKey = shippingDate.slice(0, 10);
         if (visibleSet.has(shipDayKey)) {
           const col = daysGrid.querySelector(`.cal-day-col[data-day="${shipDayKey}"]`);
           if (col) {
-            const startMin = 18 * 60; // 18:00
-            const endMin = DAY_MIN;   // 24:00
-            const el = document.createElement('div');
-            el.className = 'cal-ship-bar';
-            el.textContent = '発送';
-            el.style.cssText = `
-              position:absolute;
-              top:${(startMin/DAY_MIN)*100}%;
-              height:${((endMin-startMin)/DAY_MIN)*100}%;
-              left:2px; right:2px;
-              background:${color};
-              border-radius:4px;
-              font-size:10px;
-              font-weight:700;
-              color:#374151;
-              padding:2px 4px;
-              pointer-events:none;
-              z-index:0;
-              box-sizing:border-box;
-            `;
-            col.appendChild(el);
+            // 発送日の案件開始時刻を取得（同日の場合）
+            let usageStartMin = DAY_MIN;
+            if (startIso) {
+              const startUtc = new Date(startIso);
+              const startHm = jstHmFromUtcDate(startUtc);
+              const startDayKey = jstDayKeyFromUtcMs(startUtc.getTime());
+              if (startDayKey === shipDayKey) {
+                usageStartMin = minutesFromJstHm(startHm.hh, startHm.mm);
+              }
+            }
+            // 0:00 〜 案件開始（または18:00まで）
+            makeBar(col, 0, Math.min(usageStartMin, 18 * 60), `発送 ${title}`, SHIP_COLOR);
+            // 18:00 〜 24:00
+            makeBar(col, 18 * 60, DAY_MIN, `発送 ${title}`, SHIP_COLOR);
           }
         }
       }
 
-      // 返却バー: 案件終了 〜 返却日12:00
+      // 返却バー
       if (returnDueDate) {
         const returnDayKey = returnDueDate.slice(0, 10);
         if (visibleSet.has(returnDayKey)) {
           const col = daysGrid.querySelector(`.cal-day-col[data-day="${returnDayKey}"]`);
           if (col) {
-            const startMin = 0;      // 0:00
-            const endMin = 12 * 60;  // 12:00
-            const el = document.createElement('div');
-            el.className = 'cal-ship-bar';
-            el.textContent = '返却';
-            el.style.cssText = `
-              position:absolute;
-              top:${(startMin/DAY_MIN)*100}%;
-              height:${((endMin-startMin)/DAY_MIN)*100}%;
-              left:2px; right:2px;
-              background:${color};
-              border-radius:4px;
-              font-size:10px;
-              font-weight:700;
-              color:#374151;
-              padding:2px 4px;
-              pointer-events:none;
-              z-index:0;
-              box-sizing:border-box;
-            `;
-            col.appendChild(el);
+            // 返却日の案件終了時刻を取得（同日の場合）
+            let usageEndMin = 0;
+            if (endIso) {
+              const endUtc = new Date(endIso);
+              const endHm = jstHmFromUtcDate(endUtc);
+              const endDayKey = jstDayKeyFromUtcMs(endUtc.getTime());
+              if (endDayKey === returnDayKey) {
+                usageEndMin = minutesFromJstHm(endHm.hh, endHm.mm);
+              }
+            }
+            // 0:00 〜 12:00
+            makeBar(col, 0, 12 * 60, `返却 ${title}`, SHIP_COLOR);
+            // 案件終了（または12:00以降）〜 24:00
+            makeBar(col, Math.max(usageEndMin, 12 * 60), DAY_MIN, `返却 ${title}`, SHIP_COLOR);
           }
         }
       }
