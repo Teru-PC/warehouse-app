@@ -36,12 +36,18 @@
 
       <label>
         使用開始（必須）
-        <input id="start" type="datetime-local" required />
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input id="startDate" type="date" style="width:170px;" />
+          <select id="startTime" style="width:100px;"></select>
+        </div>
       </label>
 
       <label>
         使用終了（必須）
-        <input id="end" type="datetime-local" required />
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input id="endDate" type="date" style="width:170px;" />
+          <select id="endTime" style="width:100px;"></select>
+        </div>
       </label>
 
       <hr style="margin:14px 0; opacity:.4" />
@@ -66,6 +72,28 @@
   <script>
     (function(){
       const msg = document.getElementById("msg");
+      const startDate = document.getElementById("startDate");
+      const startTime = document.getElementById("startTime");
+      const endDate = document.getElementById("endDate");
+      const endTime = document.getElementById("endTime");
+
+      // 時間プルダウン生成（00/15/30/45分）
+      function fillTimeOptions(sel) {
+        sel.innerHTML = "";
+        for (let h = 0; h <= 23; h++) {
+          for (const m of [0, 15, 30, 45]) {
+            const v = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+            const opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = v;
+            sel.appendChild(opt);
+          }
+        }
+      }
+      fillTimeOptions(startTime);
+      fillTimeOptions(endTime);
+      startTime.value = "09:00";
+      endTime.value = "18:00";
       const form = document.getElementById("form");
       const backBtn = document.getElementById("backBtn");
       const itemsWrap = document.getElementById("itemsWrap");
@@ -240,8 +268,8 @@
 
         const title = document.getElementById("title").value.trim();
         const status = document.getElementById("status").value;
-        const startLocal = document.getElementById("start").value;
-        const endLocal = document.getElementById("end").value;
+        const startLocal = startDate.value && startTime.value ? `${startDate.value}T${startTime.value}` : "";
+        const endLocal = endDate.value && endTime.value ? `${endDate.value}T${endTime.value}` : "";
 
         if (!startLocal || !endLocal){
           show("使用開始と使用終了は必須です。");
@@ -249,8 +277,10 @@
           return;
         }
 
-        const s = new Date(startLocal);
-        const en = new Date(endLocal);
+        // JSTとして解釈してUTCに変換
+        const JST_OFFSET = 9 * 60;
+        const s = new Date(new Date(startLocal).getTime() - JST_OFFSET * 60000);
+        const en = new Date(new Date(endLocal).getTime() - JST_OFFSET * 60000);
 
         if (isNaN(s.getTime()) || isNaN(en.getTime())){
           show("日時の形式が不正です。");
