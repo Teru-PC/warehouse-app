@@ -67,7 +67,7 @@
 
   function jstMidnightUtcMs(dayKey) {
     const [y, mo, d] = dayKey.split("-").map(Number);
-    return Date.UTC(y, mo - 1, d, -9, 0, 0, 0);
+    return Date.UTC(y, mo - 1, d, 0, 0, 0, 0) - 9 * 60 * 60 * 1000;
   }
 
   function addJstDays(dayKey, deltaDays) {
