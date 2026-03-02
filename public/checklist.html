@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>チェックリスト</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { font-family: sans-serif; padding: 16px; max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    .project-info { color: #6b7280; font-size: 14px; margin-bottom: 16px; }
+
+    .progress-wrap {
+      background: #e5e7eb;
+      border-radius: 999px;
+      height: 12px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #22c55e;
+      border-radius: 999px;
+      transition: width 0.3s;
+    }
+    .progress-label {
+      text-align: right;
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 4px;
+      margin-bottom: 20px;
+    }
+
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .checklist-item:hover { background: #f9fafb; }
+    .checklist-item.is-checked { background: #f0fdf4; }
+
+    .check-box {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #d1d5db;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+      transition: all 0.15s;
+    }
+    .is-checked .check-box {
+      background: #22c55e;
+      border-color: #22c55e;
+      color: #fff;
+    }
+
+    .item-info { flex: 1; }
+    .item-name { font-weight: 700; font-size: 15px; }
+    .item-qty { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+    .btn-back {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 8px 16px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #111827;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .btn-back:hover { background: #e5e7eb; }
+
+    .empty { color: #9ca3af; text-align: center; padding: 40px 0; }
+    .error-msg { color: #b91c1c; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+  <a id="backBtn" href="#" class="btn-back">← 案件編集に戻る</a>
+
+  <h1>チェックリスト</h1>
+  <div id="projectInfo" class="project-info"></div>
+  <p id="errorMsg" class="error-msg"></p>
+
+  <div class="progress-wrap">
+    <div id="progressBar" class="progress-bar" style="width:0%"></div>
+  </div>
+  <div id="progressLabel" class="progress-label">0 / 0 完了</div>
+
+  <ul id="checklist" class="checklist"></ul>
+
+  <script>
+    const qp = new URLSearchParams(location.search);
+    const projectId = qp.get('project_id');
+    const returnUrl = qp.get('return') || '/calendar.html';
+
+    // 戻るボタン
+    document.getElementById('backBtn').href =
+      `/project-edit.html?id=${projectId}&return=${encodeURIComponent(returnUrl)}`;
+
+    function showError(msg) {
+      document.getElementById('errorMsg').textContent = msg || '';
+    }
+
+    // 進捗バー更新
+    function updateProgress(items) {
+      const total = items.length;
+      const done = items.filter(i => i.checked).length;
+      const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressLabel').textContent = `${done} / ${total} 完了（${pct}%）`;
+    }
+
+    // チェック切り替え
+    async function toggleCheck(item, el) {
+      const newChecked = !item.checked;
+      try {
+        const res = await fetch(`/api/project-items/${item.id}/check`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ checked: newChecked }),
+        });
+        if (!res.ok) throw new Error('更新失敗');
+        item.checked = newChecked;
+        el.classList.toggle('is-checked', newChecked);
+        el.querySelector('.check-box').textContent = newChecked ? '✓' : '';
+        updateProgress(currentItems);
+      } catch (e) {
+        showError('チェックの更新に失敗しました');
+      }
+    }
+
+    let currentItems = [];
+
+    // リスト描画
+    function renderList(items) {
+      currentItems = items;
+      const ul = document.getElementById('checklist');
+      ul.innerHTML = '';
+
+      if (items.length === 0) {
+        ul.innerHTML = '<li class="empty">機材が登録されていません</li>';
+        return;
+      }
+
+      for (const item of items) {
+        const li = document.createElement('li');
+        li.className = 'checklist-item' + (item.checked ? ' is-checked' : '');
+
+        li.innerHTML = `
+          <div class="check-box">${item.checked ? '✓' : ''}</div>
+          <div class="item-info">
+            <div class="item-name">${item.equipment_name}</div>
+            <div class="item-qty">数量：${item.quantity}</div>
+          </div>
+        `;
+
+        li.addEventListener('click', () => toggleCheck(item, li));
+        ul.appendChild(li);
+      }
+
+      updateProgress(items);
+    }
+
+    // データ取得
+    async function load() {
+      if (!projectId) {
+        showError('project_id が指定されていません');
+        return;
+      }
+      try {
+        // 案件情報
+        const pRes = await fetch(`/api/projects/${projectId}`);
+        if (pRes.ok) {
+          const p = await pRes.json();
+          document.getElementById('projectInfo').textContent =
+            `${p.title || ''}　${p.venue || ''}`;
+        }
+
+        // チェックリスト
+        const res = await fetch(`/api/project-items/detail?project_id=${projectId}`);
+        if (!res.ok) throw new Error('取得失敗');
+        const data = await res.json();
+        renderList(data.items || []);
+      } catch (e) {
+        showError('データの取得に失敗しました：' + e.message);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
