@@ -390,11 +390,13 @@
       buildDaysHeader(days);
       buildDaysGrid(days);
       // コーナーの高さを日付ヘッダーに合わせる
-      requestAnimationFrame(() => {
+      const syncCorner = () => {
         const headerH = document.getElementById('daysHeader').getBoundingClientRect().height;
         const corner = document.querySelector('.cal-time-corner');
-        if (corner) corner.style.height = headerH + 'px';
-      });
+        if (corner && headerH > 0) corner.style.height = headerH + 'px';
+      };
+      syncCorner();
+      requestAnimationFrame(syncCorner);
       if (datePicker) {
         datePicker.addEventListener("change", () => {
           const v = datePicker.value;
