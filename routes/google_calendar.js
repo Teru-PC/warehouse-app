@@ -120,13 +120,17 @@ async function importFromGoogle() {
       maxResults: 100
     });
 
-    const events = response.data.items || [];
+   const events = response.data.items || [];
     let importedCount = 0;
-    let updatedCount = 0;
+    let updatedCount = 0; 
 
     for (const event of events) {
-      // 終日イベント（時間なし）はスキップ
-      if (!event.start?.dateTime) continue;
+      // 既にインポート済みか確認
+      const existing = await pool.query(
+        "SELECT id FROM projects WHERE google_event_id=$1",
+        [event.id]
+      );
+      if (existing.rows.length) continue;
 
       // 日時の取得
       const startStr = event.start?.dateTime || event.start?.date;
@@ -136,7 +140,12 @@ async function importFromGoogle() {
       const usageStart = new Date(startStr);
       const usageEnd   = new Date(endStr);
 
-      // Googleカレンダー公式カラーマップ（colorId → hex）
+      // 終日イベント（時間なし）はスキップ
+      if (!event.start?.dateTime) continue;
+
+      // ✅ Googleカレンダー公式カラーマップ（colorId → hex）
+      // 正しい対応: 1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana,
+      //             6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato
       const colorMap = {
         '1':  '#7986cb', // ラベンダー（青紫）
         '2':  '#33b679', // セージ（緑）
@@ -151,30 +160,14 @@ async function importFromGoogle() {
         '11': '#d50000', // トマト（濃い赤）
       };
 
-      // イベント個別の色 → なければカレンダーのデフォルト色
-      const calColor = calColorMap['bilin.original@gmail.com'] || '#9fe1e7';
+      // イベント個別の色 → なければそのイベントが属するカレンダーの色
+      const calColor = calColorMap['bilin.original@gmail.com'] || '#3d57c4';
       const googleColor = event.colorId
         ? (colorMap[event.colorId] || calColor)
         : calColor;
       console.log(`Event: ${event.summary} | colorId: ${event.colorId} | color: ${googleColor}`);
 
-      // 既にインポート済みか確認
-      const existing = await pool.query(
-        "SELECT id FROM projects WHERE google_event_id=$1",
-        [event.id]
-      );
-
-      // 既存イベントは色だけ更新してスキップ
-      if (existing.rows.length) {
-        await pool.query(
-          "UPDATE projects SET color=$1 WHERE google_event_id=$2",
-          [googleColor, event.id]
-        );
-        updatedCount++;
-        continue;
-      }
-
-      // 新規イベントとして登録
+      // 案件として登録
       await pool.query(`
         INSERT INTO projects
           (title, venue, status, usage_start, usage_end, google_event_id, memo, color)
@@ -193,7 +186,7 @@ async function importFromGoogle() {
       importedCount++;
     }
 
-    console.log(`Google Calendar import: ${importedCount} new, ${updatedCount} color-updated`);
+    console.log(`Google Calendar import: ${importedCount} events imported`);
     return { imported: importedCount };
 
   } catch (err) {

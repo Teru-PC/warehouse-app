@@ -358,4 +358,5 @@ router.post("/trash/:id/restore", auth, async (req, res) => {
     client.release();
   }
 });
+
 module.exports = router;
