@@ -5,11 +5,20 @@
   const DAY_MIN = 1440;
   const SLOT_MIN = 30;
   const GUTTER_PX = 4;
+  const COL_W = 120;
+  const TIME_W = 72;
+  const CELL_H = 28;
 
   const daysHeader = document.getElementById("daysHeader");
   const timeCol = document.getElementById("timeCol");
   const daysGrid = document.getElementById("daysGrid");
   const errorText = document.getElementById("errorText");
+  const navBar = document.getElementById("navBar");
+  const dateHeaderBar = document.getElementById("dateHeaderBar");
+  const dateHeaderCorner = document.getElementById("dateHeaderCorner");
+  const dateHeaderScroll = document.getElementById("dateHeaderScroll");
+  const bodyWrap = document.getElementById("mainArea");
+  const gridScroll = document.getElementById("gridScroll");
 
   const modeBtns = {
     day: document.getElementById("modeDay"),
@@ -39,7 +48,6 @@
   const dtfYMD = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
   });
-
   const dtfYMDHM = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23",
@@ -82,8 +90,7 @@
 
   function startOfWeekMonday(dayKey) {
     const w = weekdayIndexInJstFromDayKey(dayKey);
-    const diff = (w === 0 ? -6 : 1 - w);
-    return addJstDays(dayKey, diff);
+    return addJstDays(dayKey, w === 0 ? -6 : 1 - w);
   }
 
   function getRangeDays(modeName, baseKey) {
@@ -101,8 +108,8 @@
     return Array.from({ length: 7 }, (_, i) => addJstDays(startKey, i));
   }
 
-  function jstHmFromUtcDate(dateObjUtc) {
-    const p = partsFromDateInJst(dateObjUtc, true);
+  function jstHmFromUtcDate(d) {
+    const p = partsFromDateInJst(d, true);
     return { hh: p.hh, mm: p.mm };
   }
 
@@ -110,17 +117,34 @@
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
   function clearChildren(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
-  function buildTimeCol() {
-    clearChildren(timeCol);
-    // 日付ヘッダーと高さを合わせるコーナー（空白）
-    const corner = document.createElement("div");
-    corner.className = "cal-time-corner";
-    corner.id = "timeCorner";
-    timeCol.appendChild(corner);
+  // レイアウト調整
+  function adjustLayout() {
+    const navH = navBar ? navBar.getBoundingClientRect().height : 0;
+    const headerH = dateHeaderBar ? dateHeaderBar.getBoundingClientRect().height : 0;
 
+    if (dateHeaderBar) {
+      dateHeaderBar.style.top = navH + "px";
+    }
+    if (bodyWrap) {
+      bodyWrap.style.marginTop = (navH + headerH) + "px";
+      bodyWrap.style.height = `calc(100vh - ${navH + headerH}px)`;
+    if (gridScroll) gridScroll.style.height = `calc(100vh - ${navH + headerH}px)`;
+    }
+    if (dateHeaderCorner) {
+      dateHeaderCorner.style.width = TIME_W + "px";
+    }
+    if (timeCol) {
+      timeCol.style.width = TIME_W + "px";
+    }
+  }
+
+  function buildTimeCol(days) {
+    clearChildren(timeCol);
+    timeCol.style.width = TIME_W + "px";
     for (let m = 0; m < DAY_MIN; m += SLOT_MIN) {
       const slot = document.createElement("div");
       slot.className = "cal-time-slot";
+      slot.style.height = CELL_H + "px";
       if (m % 60 === 0) {
         slot.classList.add("is-hour");
         slot.textContent = `${pad2(Math.floor(m / 60))}:00`;
@@ -131,6 +155,9 @@
 
   function buildDaysHeader(days) {
     clearChildren(daysHeader);
+    const colW = Math.max(COL_W, Math.floor((window.innerWidth - TIME_W) / days.length));
+    daysHeader.style.gridAutoColumns = colW + "px";
+
     for (const dayKey of days) {
       const [y, mo, d] = dayKey.split("-").map(Number);
       const w = weekdayIndexInJstFromDayKey(dayKey);
@@ -138,6 +165,7 @@
       const head = document.createElement("div");
       head.className = "cal-day-head";
       head.dataset.day = dayKey;
+      head.style.minWidth = colW + "px";
       if (w === 6) head.classList.add("is-sat");
       if (w === 0) head.classList.add("is-sun");
 
@@ -156,16 +184,22 @@
 
   function buildDaysGrid(days) {
     clearChildren(daysGrid);
+    const colW = Math.max(COL_W, Math.floor((window.innerWidth - TIME_W) / days.length));
+    daysGrid.style.gridAutoColumns = colW + "px";
+
     for (const dayKey of days) {
       const col = document.createElement("div");
       col.className = "cal-day-col";
       col.dataset.day = dayKey;
+      col.style.minWidth = colW + "px";
+      col.style.minHeight = (CELL_H * 48) + "px";
       const w = weekdayIndexInJstFromDayKey(dayKey);
       if (w === 6) col.classList.add("is-sat");
       if (w === 0) col.classList.add("is-sun");
       for (let m = 0; m < DAY_MIN; m += SLOT_MIN) {
         const line = document.createElement("div");
         line.className = "cal-slot-line";
+        line.style.height = CELL_H + "px";
         if (m % 60 === 0) line.classList.add("hour");
         col.appendChild(line);
       }
@@ -190,60 +224,45 @@
 
   async function fetchProjects() {
     const token = localStorage.getItem('token') || '';
-    const res = await fetch("/api/projects", { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+    const res = await fetch("/api/projects", {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
+    });
     const text = await res.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch {}
-    if (!res.ok) {
-      const msg = (json && (json.error || json.message)) || text || `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error((json && (json.error || json.message)) || `HTTP ${res.status}`);
     return Array.isArray(json) ? json : (json && json.value) ? json.value : (json && json.projects) ? json.projects : [];
   }
 
   async function fetchShortages(days) {
     try {
-      const from = jstMidnightUtcMs(days[0]);
-      const to = jstMidnightUtcMs(days[days.length - 1]) + 86400000;
-      const fromIso = new Date(from).toISOString();
-      const toIso = new Date(to).toISOString();
-      const res = await fetch(
-        `/api/shortages?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
-        { headers: { Accept: "application/json" } }
-      );
+      const from = new Date(jstMidnightUtcMs(days[0])).toISOString();
+      const to = new Date(jstMidnightUtcMs(days[days.length - 1]) + 86400000).toISOString();
+      const res = await fetch(`/api/shortages?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { headers: { Accept: "application/json" } });
       if (!res.ok) return new Map();
       const json = await res.json();
       const map = new Map();
-      for (const s of (json.projects || [])) {
-        map.set(s.project_id, s.shortage);
-      }
+      for (const s of (json.projects || [])) map.set(s.project_id, s.shortage);
       return map;
-    } catch (e) {
-      console.warn("shortage取得失敗:", e);
-      return new Map();
-    }
+    } catch { return new Map(); }
   }
 
   function layoutOverlaps(segs) {
-    const active = [];
-    const result = [];
-    let cluster = [];
-    let clusterMaxEnd = -1;
-
+    const active = [], result = [];
+    let cluster = [], clusterMaxEnd = -1;
     function flushCluster() {
       if (!cluster.length) return;
       let colCount = 1;
       for (const r of cluster) colCount = Math.max(colCount, r.colIndex + 1);
       for (const r of cluster) r.colCount = colCount;
-      cluster = [];
-      clusterMaxEnd = -1;
+      cluster = []; clusterMaxEnd = -1;
     }
-
     for (const s of segs) {
       for (let i = active.length - 1; i >= 0; i--) {
         if (active[i].endMin <= s.startMin) active.splice(i, 1);
       }
-      const used = new Set(active.map((a) => a.colIndex));
+      const used = new Set(active.map(a => a.colIndex));
       let colIndex = 0;
       while (used.has(colIndex)) colIndex++;
       const placed = { ...s, colIndex, colCount: 1 };
@@ -251,12 +270,8 @@
       if (!cluster.length) {
         clusterMaxEnd = s.endMin;
       } else {
-        if (s.startMin >= clusterMaxEnd) {
-          flushCluster();
-          clusterMaxEnd = s.endMin;
-        } else {
-          clusterMaxEnd = Math.max(clusterMaxEnd, s.endMin);
-        }
+        if (s.startMin >= clusterMaxEnd) { flushCluster(); clusterMaxEnd = s.endMin; }
+        else clusterMaxEnd = Math.max(clusterMaxEnd, s.endMin);
       }
       cluster.push(placed);
       result.push(placed);
@@ -265,47 +280,36 @@
     return result;
   }
 
-  function clearProjectBlocks() {
-    document.querySelectorAll(".cal-project").forEach((el) => el.remove());
-  }
-
   function renderProjects(projects, visibleDays, shortageMap = new Map()) {
-    clearProjectBlocks();
+    document.querySelectorAll(".cal-project").forEach(el => el.remove());
     const visibleSet = new Set(visibleDays);
     const segmentsByDay = new Map();
 
     for (const p of projects) {
-      const id = p.id;
-      const title = p.title || "(no title)";
-      const status = p.status || "draft";
-      const shortage = shortageMap.has(p.id) ? shortageMap.get(p.id) : Boolean(p.shortage) || Boolean(p.is_shortage);
       const startIso = p.usage_start_at || p.usage_start;
       const endIso = p.usage_end_at || p.usage_end;
       if (!startIso || !endIso) continue;
       const startUtc = new Date(startIso);
       const endUtc = new Date(endIso);
-      if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endUtc.getTime())) continue;
+      if (isNaN(startUtc.getTime()) || isNaN(endUtc.getTime())) continue;
       const startDayKey = jstDayKeyFromUtcMs(startUtc.getTime());
       const endDayKey = jstDayKeyFromUtcMs(endUtc.getTime());
       const startHm = jstHmFromUtcDate(startUtc);
       const endHm = jstHmFromUtcDate(endUtc);
       let startMin = minutesFromJstHm(startHm.hh, startHm.mm);
       let endMin = minutesFromJstHm(endHm.hh, endHm.mm);
-      if (startDayKey === endDayKey && endMin <= startMin) {
-        endMin = clamp(startMin + SLOT_MIN, 0, DAY_MIN);
-      }
+      if (startDayKey === endDayKey && endMin <= startMin) endMin = clamp(startMin + SLOT_MIN, 0, DAY_MIN);
+
       let dayKey = startDayKey;
       while (true) {
-        const isFirst = dayKey === startDayKey;
-        const isLast = dayKey === endDayKey;
-        const segStart = isFirst ? startMin : 0;
-        const segEnd = isLast ? endMin : DAY_MIN;
+        const isFirst = dayKey === startDayKey, isLast = dayKey === endDayKey;
         if (visibleSet.has(dayKey)) {
           const seg = {
-            id, title, status, shortage, dayKey,
-            startMin: clamp(segStart, 0, DAY_MIN),
-            endMin: clamp(segEnd, 0, DAY_MIN),
-            color_key: p.color_key || null,
+            id: p.id, title: p.title || "(no title)", status: p.status || "draft",
+            shortage: shortageMap.has(p.id) ? shortageMap.get(p.id) : Boolean(p.shortage),
+            dayKey, color_key: p.color_key || null,
+            startMin: clamp(isFirst ? startMin : 0, 0, DAY_MIN),
+            endMin: clamp(isLast ? endMin : DAY_MIN, 0, DAY_MIN),
           };
           if (seg.endMin > seg.startMin) {
             if (!segmentsByDay.has(dayKey)) segmentsByDay.set(dayKey, []);
@@ -320,32 +324,22 @@
     for (const dayKey of visibleDays) {
       const col = daysGrid.querySelector(`.cal-day-col[data-day="${dayKey}"]`);
       if (!col) continue;
-      const segs = (segmentsByDay.get(dayKey) || [])
-        .slice()
+      const segs = (segmentsByDay.get(dayKey) || []).slice()
         .sort((a, b) => (a.startMin - b.startMin) || (a.endMin - b.endMin) || (a.id - b.id));
-      const laidOut = layoutOverlaps(segs);
-      for (const s of laidOut) {
+      for (const s of layoutOverlaps(segs)) {
         const el = document.createElement("div");
-        el.className = "cal-project";
-        el.classList.add(String(s.status));
+        el.className = `cal-project ${s.status}`;
         if (s.shortage) el.classList.add("cal-project--shortage");
         if (s.color_key) el.classList.add(`cal-color--${s.color_key}`);
-        el.dataset.id = String(s.id);
-        el.dataset.day = s.dayKey;
         el.textContent = s.title;
-        const topPct = (s.startMin / DAY_MIN) * 100;
-        const heightPct = ((s.endMin - s.startMin) / DAY_MIN) * 100;
-        const leftPct = (s.colIndex / s.colCount) * 100;
-        const widthPct = (1 / s.colCount) * 100;
-        el.style.top = `${topPct}%`;
-        el.style.height = `${heightPct}%`;
-        el.style.left = `calc(${leftPct}% + ${GUTTER_PX}px)`;
-        el.style.width = `calc(${widthPct}% - ${GUTTER_PX * 2}px)`;
-        el.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+        el.style.top = `${(s.startMin / DAY_MIN) * 100}%`;
+        el.style.height = `${((s.endMin - s.startMin) / DAY_MIN) * 100}%`;
+        el.style.left = `calc(${(s.colIndex / s.colCount) * 100}% + ${GUTTER_PX}px)`;
+        el.style.width = `calc(${(1 / s.colCount) * 100}% - ${GUTTER_PX * 2}px)`;
+        el.addEventListener("click", ev => {
+          ev.preventDefault(); ev.stopPropagation();
           const ret = encodeURIComponent(location.pathname + location.search);
-          location.href = `/project-edit.html?id=${encodeURIComponent(String(s.id))}&return=${ret}`;
+          location.href = `/project-edit.html?id=${s.id}&return=${ret}`;
         });
         col.appendChild(el);
       }
@@ -354,27 +348,19 @@
 
   function renderShipBtns(projects) {
     document.querySelectorAll('.cal-ship-btn-area').forEach(a => a.innerHTML = '');
-
     for (const p of projects) {
       if (!p.shipping_date) continue;
       const shipDayKey = p.shipping_date.slice(0, 10);
       const btnArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${shipDayKey}"]`);
       if (!btnArea) continue;
-
-      const startUtc = new Date(p.usage_start_at || p.usage_start);
-      const startParts = partsFromDateInJst(startUtc, false);
-      const mo = startParts.mo;
-      const da = startParts.d;
-
+      const startParts = partsFromDateInJst(new Date(p.usage_start_at || p.usage_start), false);
       const btn = document.createElement('button');
       btn.className = 'cal-ship-btn';
-      btn.innerHTML = `【発送】${p.title || ''} ${mo}/${da}`;
-      btn.title = `【発送】${p.title || ''} ${mo}/${da}`;
-      btn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+      btn.textContent = `【発送】${p.title || ''} ${startParts.mo}/${startParts.d}`;
+      btn.addEventListener('click', ev => {
+        ev.preventDefault(); ev.stopPropagation();
         const ret = encodeURIComponent(location.pathname + location.search);
-        location.href = `/checklist.html?project_id=${encodeURIComponent(String(p.id))}&return=${ret}`;
+        location.href = `/checklist.html?project_id=${p.id}&return=${ret}`;
       });
       btnArea.appendChild(btn);
     }
@@ -392,19 +378,24 @@
       const days = getRangeDays(mode, baseKey);
       setActiveModeBtn(mode);
       if (datePicker) datePicker.value = baseKey;
-      buildTimeCol();
+
+      // レイアウト調整
+      adjustLayout();
+
+      buildTimeCol(days);
       buildDaysHeader(days);
       buildDaysGrid(days);
-      // コーナーの高さを日付ヘッダーに合わせる
-      const syncCorner = () => {
-        const header = document.getElementById('daysHeader');
-        const corner = document.getElementById('timeCorner');
-        if (!header || !corner) return;
-        const h = header.getBoundingClientRect().height;
-        if (h > 0) corner.style.height = h + 'px';
-      };
-      setTimeout(syncCorner, 50);
-      setTimeout(syncCorner, 200);
+
+      // 再調整（ヘッダー高さが確定後）
+      requestAnimationFrame(() => {
+        adjustLayout();
+        // 横スクロール同期
+        gridScroll.addEventListener("scroll", () => {
+          dateHeaderScroll.scrollLeft = gridScroll.scrollLeft;
+          timeCol.scrollTop = gridScroll.scrollTop;
+        });
+      });
+
       if (datePicker) {
         datePicker.addEventListener("change", () => {
           const v = datePicker.value;
@@ -427,19 +418,14 @@
         const ret = encodeURIComponent(location.pathname + location.search);
         location.href = `/project-new.html?return=${ret}`;
       });
-      const [projects, shortageMap] = await Promise.all([
-        fetchProjects(),
-        fetchShortages(days),
-      ]);
+
+      const [projects, shortageMap] = await Promise.all([fetchProjects(), fetchShortages(days)]);
       renderProjects(projects, days, shortageMap);
       renderShipBtns(projects);
 
-      // 7:00の位置にスクロール
-      const slot7 = document.querySelector(".cal-time-slot");
-      if (slot7) {
-        const slotH7 = slot7.getBoundingClientRect().height || 28;
-        window.scrollTo({ top: slotH7 * 14 * 2, behavior: "instant" });
-      }
+      // 7:00にスクロール
+      gridScroll.scrollTop = CELL_H * 14;
+
     } catch (e) {
       console.error(e);
       showError(String(e.message || e));

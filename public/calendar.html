@@ -5,102 +5,182 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>カレンダー</title>
-  <link rel="stylesheet" href="/css/calendar.css" />
+  <link rel="icon" href="data:," />
   <style>
-    .cal-header-fixed {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 200;
-      background: #fff;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; overflow: hidden; height: 100vh; }
+
+    .cal-nav-btn {
+      width: 88px; padding: 6px;
+      border: 1px solid #e5e7eb; background: #fff;
+      border-radius: 10px; cursor: pointer;
+      font-weight: 700; font-size: 12px;
+    }
+    .cal-error { color: #b91c1c; font-size: 12px; }
+
+    /* 最上部固定ナビ */
+    #navBar {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 300; background: #fff;
       border-bottom: 1px solid #e5e7eb;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
     .cal-nav-row {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      padding: 6px 12px;
-    }
-    .cal-controls {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      flex-wrap: wrap;
-    }
-    .cal-mode-btn {
-      border: 1px solid #e5e7eb;
-      background: #fff;
-      font-weight: 600;
-      font-size: 12px;
-      padding: 5px 10px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    .cal-mode-btn.is-active { background: #2563eb; color: #fff; border-color: #2563eb; }
-    .cal-date {
-      padding: 5px 8px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 12px;
-    }
-    .cal-nav-btn {
-      width: 88px;
-      padding: 6px;
-      border: 1px solid #e5e7eb;
-      background: #fff;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 12px;
+      align-items: center; padding: 6px 12px;
     }
     #prevBtn { justify-self: start; }
     #nextBtn { justify-self: end; }
     .cal-nav-mid {
-      justify-self: center;
-      display: flex;
-      gap: 12px;
-      align-items: center;
+      justify-self: center; display: flex;
+      gap: 8px; align-items: center;
     }
-    .cal-error { color: #b91c1c; min-height: 18px; font-size: 12px; }
-    .cal-topbar-spacer { height: 88px; }
+    .cal-controls {
+      display: flex; justify-content: center;
+      align-items: center; gap: 6px; padding: 4px 12px;
+    }
+    .cal-mode-btn {
+      border: 1px solid #e5e7eb; background: #fff;
+      font-weight: 600; font-size: 12px;
+      padding: 5px 10px; border-radius: 8px; cursor: pointer;
+    }
+    .cal-mode-btn.is-active { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .cal-date {
+      padding: 5px 8px; border: 1px solid #e5e7eb;
+      border-radius: 8px; font-size: 12px;
+    }
+
+    /* 日付ヘッダー固定バー */
+    #dateHeaderBar {
+      position: fixed; left: 0; right: 0;
+      z-index: 200; background: #fff;
+      border-bottom: 2px solid #e5e7eb;
+      display: flex;
+    }
+    #dateHeaderCorner {
+      flex-shrink: 0; background: #fff;
+      border-right: 1px solid #e5e7eb;
+    }
+    #dateHeaderScroll { flex: 1; overflow: hidden; }
+    #daysHeader { display: grid; grid-auto-flow: column; }
+    .cal-day-head {
+      padding: 6px 8px; border-left: 1px solid #e5e7eb;
+      font-weight: 700; font-size: 13px; white-space: nowrap;
+    }
+    .cal-day-head.is-sat { background: #eaf3ff; }
+    .cal-day-head.is-sun { background: #ffecec; }
+    .cal-ship-btn-area {
+      display: flex; flex-direction: column; gap: 2px; padding: 2px 4px;
+    }
+    .cal-ship-btn {
+      display: block; width: 100%;
+      background: #fecaca; border: 1px solid #f87171;
+      border-radius: 8px; font-size: 10px; font-weight: 700;
+      color: #7f1d1d; padding: 3px 6px; cursor: pointer;
+      text-align: left; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; line-height: 22px; height: 28px;
+    }
+    .cal-ship-btn:hover { background: #fca5a5; }
+
+    /* メインエリア：時間列 + グリッドスクロール */
+    #mainArea {
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* 時間列：縦スクロールのみ、横は固定 */
+    #timeCol {
+      flex-shrink: 0;
+      width: 72px;
+      overflow: hidden;
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      z-index: 10;
+    }
+    .cal-time-slot {
+      display: flex; align-items: flex-start;
+      justify-content: flex-end;
+      padding-right: 8px; padding-top: 2px;
+      font-size: 11px; color: #6b7280;
+    }
+    .cal-time-slot.is-hour { font-weight: 700; color: #111827; font-size: 12px; }
+
+    /* グリッドスクロール：縦横両方スクロール */
+    #gridScroll {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: auto;
+    }
+    #daysGrid { display: grid; grid-auto-flow: column; }
+    .cal-day-col {
+      position: relative;
+      border-left: 1px solid #e5e7eb;
+    }
+    .cal-day-col.is-sat { background: #f6fbff; }
+    .cal-day-col.is-sun { background: #fff7f7; }
+    .cal-slot-line { position: relative; }
+    .cal-slot-line::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0;
+      border-top: 1px dashed #e5e7eb;
+    }
+    .cal-slot-line.hour::before { border-top: 2px solid #9ca3af; }
+
+    .cal-project {
+      position: absolute; border-radius: 6px; padding: 4px 6px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      color: #111827; overflow: hidden; box-sizing: border-box;
+    }
+    .cal-project.draft { background: #93c5fd; }
+    .cal-project.confirmed { background: #86efac; }
+    .cal-project.cancelled { background: #fca5a5; }
+    .cal-project.cal-project--shortage { box-shadow: 0 0 0 3px #dc2626 inset; }
+    .cal-project.cal-color--1{ background:#fecaca; }
+    .cal-project.cal-color--2{ background:#fed7aa; }
+    .cal-project.cal-color--3{ background:#fef3c7; }
+    .cal-project.cal-color--4{ background:#d9f99d; }
+    .cal-project.cal-color--5{ background:#bbf7d0; }
+    .cal-project.cal-color--6{ background:#a7f3d0; }
+    .cal-project.cal-color--7{ background:#99f6e4; }
+    .cal-project.cal-color--8{ background:#a5f3fc; }
+    .cal-project.cal-color--9{ background:#bae6fd; }
+    .cal-project.cal-color--10{ background:#c7d2fe; }
+    .cal-project.cal-color--11{ background:#e9d5ff; }
+    .cal-project.cal-color--12{ background:#fbcfe8; }
   </style>
 </head>
 <body>
 
-  <div class="cal-header-fixed">
+  <div id="navBar">
     <div class="cal-nav-row">
-      <button class="cal-nav-btn" id="prevBtn">戻る</button>
+      <button class="cal-nav-btn" id="prevBtn" type="button">戻る</button>
       <div class="cal-nav-mid">
-        <button class="cal-nav-btn" id="newBtn">新規作成</button>
-        <a class="cal-nav-btn" href="/equipment.html" style="text-decoration:none; text-align:center; line-height:1.4;">機材管理</a>
-        <p class="cal-error" id="errorText"></p>
+        <button class="cal-nav-btn" id="newBtn" type="button">新規作成</button>
+        <a class="cal-nav-btn" href="/equipment.html" style="text-decoration:none;text-align:center;line-height:2;">機材管理</a>
+        <span class="cal-error" id="errorText"></span>
       </div>
-      <button class="cal-nav-btn" id="nextBtn">進む</button>
+      <button class="cal-nav-btn" id="nextBtn" type="button">進む</button>
     </div>
     <div class="cal-controls">
-      <button class="cal-mode-btn" data-mode="day"   id="modeDay">日</button>
-      <button class="cal-mode-btn" data-mode="week"  id="modeWeek">週</button>
-      <button class="cal-mode-btn" data-mode="2week" id="mode2Week">2週</button>
-      <button class="cal-mode-btn" data-mode="month" id="modeMonth">月</button>
+      <button class="cal-mode-btn" id="modeDay"   type="button">日</button>
+      <button class="cal-mode-btn" id="modeWeek"  type="button">週</button>
+      <button class="cal-mode-btn" id="mode2Week" type="button">2週</button>
+      <button class="cal-mode-btn" id="modeMonth" type="button">月</button>
       <input type="date" class="cal-date" id="datePicker" />
     </div>
   </div>
 
-  <div class="cal-topbar-spacer"></div>
+  <div id="dateHeaderBar">
+    <div id="dateHeaderCorner"></div>
+    <div id="dateHeaderScroll">
+      <div id="daysHeader"></div>
+    </div>
+  </div>
 
-  <div id="gridRoot">
-    <div class="cal-scroll-body">
-      <div class="cal-time-col" id="timeCol">
-        <div class="cal-time-corner"></div>
-      </div>
-      <div style="flex:1; min-width:0;">
-        <div class="cal-days-header" id="daysHeader"></div>
-        <div class="cal-days-grid" id="daysGrid"></div>
-      </div>
+  <div id="mainArea">
+    <div id="timeCol"></div>
+    <div id="gridScroll">
+      <div id="daysGrid"></div>
     </div>
   </div>
 
