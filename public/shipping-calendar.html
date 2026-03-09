@@ -333,9 +333,55 @@
         while (compareDates(d, eventStart) < 0) { skipDays.add(d); d = addDays(d, 1); }
       }
 
+      // 本番期間のspan数を事前計算
+      let eventSpanCount = 0;
+      if (eventStart && eventEnd) {
+        let d = eventStart;
+        while (compareDates(d, eventEnd) <= 0 && dayIdx[d] !== undefined) {
+          eventSpanCount++;
+          d = addDays(d, 1);
+        }
+        eventSpanCount = Math.max(1, eventSpanCount);
+      }
+
+      // 返却期間のspan数
+      let retSpanCount = 0;
+      if (eventEnd && retDate) {
+        let d = addDays(eventEnd, 1);
+        while (compareDates(d, retDate) <= 0 && dayIdx[d] !== undefined) {
+          retSpanCount++;
+          d = addDays(d, 1);
+        }
+      }
+
+      // スキップセット
+      const skipDaysEvent = new Set();
+      if (eventStart && eventEnd && eventSpanCount > 1) {
+        let d = addDays(eventStart, 1);
+        while (compareDates(d, eventEnd) <= 0) { skipDaysEvent.add(d); d = addDays(d, 1); }
+      }
+      const skipDaysRet = new Set();
+      if (eventEnd && retDate && retSpanCount > 1) {
+        let d = addDays(addDays(eventEnd, 1), 1);
+        while (compareDates(d, retDate) <= 0) { skipDaysRet.add(d); d = addDays(d, 1); }
+      }
+
+      function makeBlock(cls, text, title, isLight, onclick) {
+        const block = document.createElement('div');
+        block.className = `block ${status} ${cls}`;
+        applyColor(block, p.color, isLight);
+        block.textContent = text;
+        block.title = title;
+        block.addEventListener('mouseup', ev => {
+          if (ev.button !== 0) return;
+          if (dragMoved) return;
+          onclick();
+        });
+        return block;
+      }
+
       for (const day of days) {
-        // スキップ対象はtdを追加しない
-        if (skipDays.has(day)) continue;
+        if (skipDays.has(day) || skipDaysEvent.has(day) || skipDaysRet.has(day)) continue;
 
         const td = document.createElement('td');
         td.className = 'td-day';
@@ -348,50 +394,39 @@
         if (shipDate && day === shipDate && shipSpanCount > 0) {
           td.colSpan = shipSpanCount;
           const block = document.createElement('div');
-          block.className = `block ${status} light`;
-          if (p.color) {
-            block.style.cssText = `background:#fff !important; border:2px solid #dc2626 !important; color:#333 !important;`;
-          } else {
-            block.style.cssText = `background:#fff !important; border:2px solid #dc2626 !important;`;
-          }
-          const shipLabel = document.createElement('span');
-          shipLabel.textContent = '【発送】';
-          shipLabel.style.cssText = 'color:#dc2626; font-weight:700; margin-right:4px;';
-          block.appendChild(shipLabel);
-          block.appendChild(document.createTextNode(`${p.title || ''} 本番${eventMD}`));
+          block.className = `block light`;
+          block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
+          block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
           block.title = `発送〜本番: ${p.title}`;
-          block.addEventListener('click', ev => { ev.stopPropagation(); openChecklist(p); });
+          block.addEventListener('mousedown', ev => { if (ev.button !== 0) return; ev.stopPropagation(); });
+          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; ev.stopPropagation(); openChecklist(p); });
           td.appendChild(block);
           row.appendChild(td);
           continue;
         }
 
-        // 本番日・返却期間
-        let blockType = null;
-        if (eventStart && day === eventStart) {
-          blockType = 'event';
-        } else if (eventStart && eventEnd && compareDates(day, eventStart) > 0 && compareDates(day, eventEnd) <= 0) {
-          blockType = 'event';
-        } else if (eventEnd && retDate && compareDates(day, eventEnd) > 0 && compareDates(day, retDate) <= 0) {
-          blockType = 'return';
+        // 本番ブロック（colspan付き）
+        if (eventStart && day === eventStart && eventSpanCount > 0) {
+          td.colSpan = eventSpanCount;
+          const block = makeBlock('event-day', `🎬 ${p.title || ''} ${startTime}〜${endTime}`, `本番日: ${p.title}`, false, () => { location.href = `/project-edit.html?id=${p.id}&return=${encodeURIComponent(location.pathname + location.search)}`; });
+          td.appendChild(block);
+          row.appendChild(td);
+          continue;
         }
 
-        if (blockType) {
+        // 返却ブロック（colspan付き）
+        if (eventEnd && retDate && day === addDays(eventEnd, 1) && retSpanCount > 0) {
+          td.colSpan = retSpanCount;
           const block = document.createElement('div');
-          block.className = `block ${status}`;
-          if (blockType === 'event') {
-            block.classList.add('event-day');
-            block.textContent = `🎬 ${p.title || ''} ${startTime}〜${endTime}`;
-            block.title = `本番日: ${p.title} ${startTime}〜${endTime}`;
-            applyColor(block, p.color, false);
-          } else if (blockType === 'return') {
-            block.classList.add('light');
-            block.textContent = `↩ ${p.title || ''}`;
-            block.title = `返却期間: ${p.title}`;
-            applyColor(block, p.color, true);
-          }
-          block.addEventListener('click', ev => { ev.stopPropagation(); openChecklist(p); });
+          block.className = `block light`;
+          block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
+          block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
+          block.title = `返却期間: ${p.title}`;
+          block.addEventListener('mousedown', ev => { if (ev.button !== 0) return; ev.stopPropagation(); });
+          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; ev.stopPropagation(); openChecklist(p); });
           td.appendChild(block);
+          row.appendChild(td);
+          continue;
         }
 
         row.appendChild(td);
@@ -463,6 +498,36 @@
       errorText.textContent = e.message;
     }
   }
+
+  // ドラッグスクロール
+  const timelinePane = document.getElementById('timelinePane');
+  let isDragging = false;
+  let dragStartX = 0, dragStartY = 0;
+  let dragScrollLeft = 0, dragScrollTop = 0;
+  let dragMoved = false;
+  timelinePane.style.userSelect = 'none';
+  timelinePane.addEventListener('mousedown', ev => {
+    if (ev.button !== 0) return;
+    isDragging = true;
+    dragMoved = false;
+    dragStartX = ev.clientX;
+    dragStartY = ev.clientY;
+    dragScrollLeft = timelinePane.scrollLeft;
+    dragScrollTop  = timelinePane.scrollTop;
+    timelinePane.style.cursor = 'grabbing';
+  });
+  document.addEventListener('mousemove', ev => {
+    if (!isDragging) return;
+    const dx = ev.clientX - dragStartX;
+    const dy = ev.clientY - dragStartY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+    timelinePane.scrollLeft = dragScrollLeft - dx;
+    timelinePane.scrollTop  = dragScrollTop  - dy;
+  });
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    timelinePane.style.cursor = '';
+  });
 
   monthPicker.addEventListener('change', () => {
     const [y, m] = monthPicker.value.split('-').map(Number);

@@ -406,8 +406,8 @@
         el.textContent = s.title;
         el.style.top = `${(s.startMin / DAY_MIN) * 100}%`;
         el.style.height = `${((s.endMin - s.startMin) / DAY_MIN) * 100}%`;
-        el.style.left = `calc(${s.colIndex * 16}px + ${GUTTER_PX}px)`;
-        el.style.width = `calc(100% - ${s.colIndex * 16}px - ${GUTTER_PX * 2}px)`;
+        el.style.left = `calc(${s.colIndex * 40}px + ${GUTTER_PX}px)`;
+        el.style.width = `calc(100% - ${s.colIndex * 40}px - ${GUTTER_PX * 2}px)`;
         el.dataset.id = s.id;
         el.addEventListener("click", ev => {
           if (suppressNextClick) { suppressNextClick = false; ev.preventDefault(); ev.stopPropagation(); return; }
