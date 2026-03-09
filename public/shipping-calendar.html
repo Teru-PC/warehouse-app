@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <script src="/js/auth.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>発送確認カレンダー</title>
+  <link rel="icon" href="data:," />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f8fafc; color: #111827; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ナビバー */
+    #navBar {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    #navBack {
+      padding: 6px 14px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      margin-right: 12px;
+    }
+    #navBack:hover { background: #f3f4f6; }
+    #navTitle { font-size: 10px; font-weight: 700; flex: 1; }
+    #navCenter {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    #navMonthRow {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-btn {
+      padding: 4px 10px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .nav-btn:hover { background: #f3f4f6; }
+    #monthPicker {
+      padding: 4px 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    #errorText { color: #b91c1c; font-size: 12px; }
+
+    /* メインレイアウト */
+    #mainLayout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* 左：タイムライン */
+    #timelinePane {
+      flex: 1;
+      overflow: auto;
+      border-right: 2px solid #e5e7eb;
+    }
+
+    /* 右：チェックリスト */
+    #checklistPane {
+      width: 360px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      background: #fff;
+      padding: 16px;
+    }
+    #checklistPane h2 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #1e40af;
+    }
+    #checklistPane .meta {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+    #checklistEmpty {
+      color: #9ca3af;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 40px;
+    }
+
+    /* チェックリストアイテム */
+    .cl-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .cl-item input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+    .cl-item .item-name { flex: 1; font-size: 13px; }
+    .cl-item .item-name.checked { text-decoration: line-through; color: #9ca3af; }
+    .cl-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
+
+    /* テーブル */
+    #calTable {
+      border-collapse: collapse;
+      white-space: nowrap;
+    }
+
+    /* 固定ヘッダー */
+    #calTable thead th {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 20;
+      border: 1px solid #e5e7eb;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 6px;
+      text-align: center;
+      min-width: 36px;
+    }
+    #calTable thead th.th-project {
+      position: sticky;
+      top: 0;
+      left: 0;
+      z-index: 30;
+      min-width: 160px;
+      text-align: left;
+      padding-left: 8px;
+    }
+    #calTable thead th.is-sat { background: #eaf3ff; }
+    #calTable thead th.is-sun { background: #ffecec; }
+    #calTable thead th.is-today { background: #fef9c3; }
+
+    /* 固定プロジェクト列 */
+    #calTable tbody td.td-project {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+      min-width: 160px;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    #calTable tbody td.td-project:hover { background: #f3f4f6; }
+
+    /* セル */
+    #calTable tbody td.td-day {
+      border: 1px solid #e5e7eb;
+      padding: 0;
+      height: 36px;
+      min-width: 36px;
+      vertical-align: middle;
+    }
+    #calTable tbody td.is-sat { background: #f6fbff; }
+    #calTable tbody td.is-sun { background: #fff7f7; }
+    #calTable tbody td.is-today { background: #fefce8; }
+
+    /* ブロック */
+    .block {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-radius: 0;
+    }
+    .block:hover { filter: brightness(0.92); }
+
+    /* ステータス別色 */
+    .block.draft        { background: #93c5fd; color: #1e3a5f; }
+    .block.confirmed    { background: #86efac; color: #14532d; }
+    .block.cancelled    { background: #fca5a5; color: #7f1d1d; }
+
+    /* 発送・返却期間は薄い色 */
+    .block.draft.light     { background: #dbeafe; color: #1e3a5f; }
+    .block.confirmed.light { background: #dcfce7; color: #14532d; }
+    .block.cancelled.light { background: #fee2e2; color: #7f1d1d; }
+
+    /* 本番日は左右に丸み */
+    .block.event-day { border-radius: 6px; font-size: 11px; }
+
+    /* ローディング */
+    #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div id="navBar">
+    <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
+    <span style="font-size:13px;font-weight:700;">📦 発送確認カレンダー</span>
+    <div style="flex:1;"></div>
+    <button class="nav-btn" id="prevMonthBtn">◀</button>
+    <input type="month" id="monthPicker" />
+    <button class="nav-btn" id="nextMonthBtn">▶</button>
+    <span id="errorText"></span>
+  </div>
+
+  <div id="mainLayout">
+    <div id="timelinePane">
+      <div id="loadingMsg">読み込み中...</div>
+      <table id="calTable" style="display:none;">
+        <thead id="calHead"></thead>
+        <tbody id="calBody"></tbody>
+      </table>
+    </div>
+    <div id="checklistPane">
+      <div id="checklistEmpty">← 案件をクリックすると<br>チェックリストが表示されます</div>
+      <div id="checklistContent" style="display:none;"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  const TZ = 'Asia/Tokyo';
+  const WEEKDAYS = ['日','月','火','水','木','金','土'];
+
+  // DOM
+  const monthPicker = document.getElementById('monthPicker');
+  const prevMonthBtn = document.getElementById('prevMonthBtn');
+  const nextMonthBtn = document.getElementById('nextMonthBtn');
+  const calHead = document.getElementById('calHead');
+  const calBody = document.getElementById('calBody');
+  const calTable = document.getElementById('calTable');
+  const loadingMsg = document.getElementById('loadingMsg');
+  const errorText = document.getElementById('errorText');
+  const checklistEmpty = document.getElementById('checklistEmpty');
+  const checklistContent = document.getElementById('checklistContent');
+
+  // 今月を初期値に
+  const now = new Date();
+  let currentYear = now.getFullYear();
+  let currentMonth = now.getMonth() + 1;
+  monthPicker.value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+
+  function pad2(n) { return String(n).padStart(2,'0'); }
+
+  function toJstDateStr(isoStr) {
+    if (!isoStr) return null;
+    const d = new Date(isoStr);
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit' });
+    return fmt.format(d);
+  }
+
+  function todayJst() {
+    return toJstDateStr(new Date().toISOString());
+  }
+
+  function getDaysInMonth(y, m) {
+    const days = [];
+    const total = new Date(y, m, 0).getDate();
+    for (let d = 1; d <= total; d++) {
+      days.push(`${y}-${pad2(m)}-${pad2(d)}`);
+    }
+    return days;
+  }
+
+  function getWeekday(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m-1, d)).getUTCDay();
+  }
+
+  function addDays(dateStr, n) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m-1, d));
+    dt.setUTCDate(dt.getUTCDate() + n);
+    return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth()+1)}-${pad2(dt.getUTCDate())}`;
+  }
+
+  function compareDates(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  async function fetchProjects() {
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch('/api/projects', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    return Array.isArray(json) ? json : json.projects || [];
+  }
+
+  async function fetchChecklist(projectId) {
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(`/api/project-items/detail?project_id=${projectId}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.items || (Array.isArray(json) ? json : []);
+  }
+
+  async function toggleCheckItem(projectId, itemId, checked) {
+    const token = localStorage.getItem('token') || '';
+    await fetch(`/api/project-items/${itemId}/check`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ checked })
+    });
+  }
+
+  function buildTable(projects, days) {
+    const today = todayJst();
+    const daySet = new Set(days);
+
+    // ヘッダー
+    calHead.innerHTML = '';
+    const tr = document.createElement('tr');
+    const thP = document.createElement('th');
+    thP.className = 'th-project';
+    thP.textContent = '案件';
+    tr.appendChild(thP);
+    for (const day of days) {
+      const th = document.createElement('th');
+      const w = getWeekday(day);
+      const d = Number(day.split('-')[2]);
+      th.textContent = `${d}\n${WEEKDAYS[w]}`;
+      th.style.whiteSpace = 'pre';
+      if (w === 6) th.classList.add('is-sat');
+      if (w === 0) th.classList.add('is-sun');
+      if (day === today) th.classList.add('is-today');
+      tr.appendChild(th);
+    }
+    calHead.appendChild(tr);
+
+    // ボディ
+    calBody.innerHTML = '';
+
+    // 表示対象案件を絞り込み（月内に何らかの期間がある案件）
+    const visibleProjects = projects.filter(p => {
+      const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
+      const eventEnd   = toJstDateStr(p.usage_end_at || p.usage_end);
+      const shipDate   = p.shipping_date ? p.shipping_date.slice(0,10) : null;
+      const retDate    = p.return_due_date ? p.return_due_date.slice(0,10) : null;
+      const rangeStart = shipDate || eventStart;
+      const rangeEnd   = retDate || eventEnd;
+      if (!rangeStart || !rangeEnd) return false;
+      const monthStart = days[0];
+      const monthEnd   = days[days.length-1];
+      return compareDates(rangeStart, monthEnd) <= 0 && compareDates(rangeEnd, monthStart) >= 0;
+    });
+
+    if (visibleProjects.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = days.length + 1;
+      td.textContent = 'この月に案件はありません';
+      td.style.cssText = 'text-align:center;padding:24px;color:#9ca3af;font-size:13px;';
+      tr.appendChild(td);
+      calBody.appendChild(tr);
+      return;
+    }
+
+    for (const p of visibleProjects) {
+      const status = p.status || 'draft';
+      const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
+      const eventEnd   = toJstDateStr(p.usage_end_at || p.usage_end);
+      const shipDate   = p.shipping_date ? p.shipping_date.slice(0,10) : null;
+      const retDate    = p.return_due_date ? p.return_due_date.slice(0,10) : null;
+
+      // 開始時間・終了時間（JST）
+      let startTime = '', endTime = '';
+      if (p.usage_start_at || p.usage_start) {
+        const d = new Date(p.usage_start_at || p.usage_start);
+        const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, hour:'2-digit', minute:'2-digit', hour12: false });
+        startTime = fmt.format(d);
+      }
+      if (p.usage_end_at || p.usage_end) {
+        const d = new Date(p.usage_end_at || p.usage_end);
+        const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, hour:'2-digit', minute:'2-digit', hour12: false });
+        endTime = fmt.format(d);
+      }
+
+      // 本番日のMD表示
+      let eventMD = '';
+      if (eventStart) {
+        const [, em, ed] = eventStart.split('-');
+        eventMD = `${Number(em)}/${Number(ed)}`;
+      }
+
+      const row = document.createElement('tr');
+
+      // プロジェクト名セル
+      const tdP = document.createElement('td');
+      tdP.className = 'td-project';
+      tdP.textContent = p.title || '(無題)';
+      tdP.title = p.title || '';
+      tdP.addEventListener('click', () => openChecklist(p));
+      row.appendChild(tdP);
+
+      // 日付セル
+      for (const day of days) {
+        const td = document.createElement('td');
+        td.className = 'td-day';
+        const w = getWeekday(day);
+        if (w === 6) td.classList.add('is-sat');
+        if (w === 0) td.classList.add('is-sun');
+        if (day === today) td.classList.add('is-today');
+
+        // ブロック種別を判定
+        let blockType = null; // 'ship'=発送前, 'event'=本番日, 'return'=返却期間, null=なし
+
+        if (eventStart && day === eventStart) {
+          blockType = 'event';
+        } else if (shipDate && eventStart && compareDates(day, shipDate) >= 0 && compareDates(day, eventStart) < 0) {
+          blockType = 'ship';
+        } else if (eventEnd && retDate && compareDates(day, eventEnd) > 0 && compareDates(day, retDate) <= 0) {
+          blockType = 'return';
+        } else if (eventStart && eventEnd && compareDates(day, eventStart) > 0 && compareDates(day, eventEnd) <= 0) {
+          // 複数日案件の場合（本番期間中）
+          blockType = 'event';
+        }
+
+        if (blockType) {
+          const block = document.createElement('div');
+          block.className = `block ${status}`;
+
+          if (blockType === 'ship') {
+            block.classList.add('light');
+            block.textContent = `📦 ${p.title || ''} 本番${eventMD}`;
+            block.title = `発送〜本番: ${p.title}`;
+          } else if (blockType === 'event') {
+            block.classList.add('event-day');
+            block.textContent = `🎬 ${p.title || ''} ${startTime}〜${endTime}`;
+            block.title = `本番日: ${p.title} ${startTime}〜${endTime}`;
+          } else if (blockType === 'return') {
+            block.classList.add('light');
+            block.textContent = `↩ ${p.title || ''}`;
+            block.title = `返却期間: ${p.title}`;
+          }
+
+          block.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            openChecklist(p);
+          });
+
+          td.appendChild(block);
+        }
+
+        row.appendChild(td);
+      }
+
+      calBody.appendChild(row);
+    }
+  }
+
+  async function openChecklist(project) {
+    checklistEmpty.style.display = 'none';
+    checklistContent.style.display = 'block';
+    checklistContent.innerHTML = `
+      <h2>${project.title || '(無題)'}</h2>
+      <div class="meta">読み込み中...</div>
+    `;
+
+    try {
+      const items = await fetchChecklist(project.id);
+      const status = { draft: '仮', confirmed: '確定', cancelled: 'キャンセル' }[project.status] || '';
+
+      let html = `
+        <h2>${project.title || '(無題)'}</h2>
+        <div class="meta" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span>${status}</span><button onclick="location.href='/project-edit.html?id=${project.id}'" style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">編集ページへ →</button></div>
+      `;
+
+      if (items.length === 0) {
+        html += `<div style="color:#9ca3af;font-size:13px;margin-top:16px;">チェックリストアイテムがありません</div>`;
+      } else {
+        for (const item of items) {
+          const checked = item.checked ? 'checked' : '';
+          const nameClass = item.checked ? 'item-name checked' : 'item-name';
+          const img = item.image_url ? `<img src="${item.image_url}" alt="">` : '';
+          const qty = item.quantity ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${item.quantity}個</span>` : '';
+          html += `
+            <div class="cl-item">
+              <input type="checkbox" ${checked} data-item-id="${item.id}" data-project-id="${project.id}" />
+              ${img}
+              <span class="${nameClass}">${item.name || item.equipment_name || ''}</span>
+              ${qty}
+            </div>
+          `;
+        }
+      }
+
+      checklistContent.innerHTML = html;
+
+      // チェックボックスイベント
+      checklistContent.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          const itemId = cb.dataset.itemId;
+          const projectId = cb.dataset.projectId;
+          const span = cb.parentElement.querySelector('.item-name');
+          if (cb.checked) {
+            span.classList.add('checked');
+          } else {
+            span.classList.remove('checked');
+          }
+          await toggleCheckItem(projectId, itemId, cb.checked);
+        });
+      });
+
+    } catch (e) {
+      checklistContent.innerHTML = `<div style="color:#b91c1c;">チェックリストの取得に失敗しました</div>`;
+    }
+  }
+
+  async function render() {
+    errorText.textContent = '';
+    loadingMsg.style.display = 'block';
+    calTable.style.display = 'none';
+
+    try {
+      const days = getDaysInMonth(currentYear, currentMonth);
+      const projects = await fetchProjects();
+      buildTable(projects, days);
+      loadingMsg.style.display = 'none';
+      calTable.style.display = '';
+    } catch(e) {
+      loadingMsg.textContent = 'エラーが発生しました';
+      errorText.textContent = e.message;
+    }
+  }
+
+  // 月選択
+  monthPicker.addEventListener('change', () => {
+    const [y, m] = monthPicker.value.split('-').map(Number);
+    currentYear = y;
+    currentMonth = m;
+    render();
+  });
+
+  prevMonthBtn.addEventListener('click', () => {
+    currentMonth--;
+    if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+    monthPicker.value = `${currentYear}-${pad2(currentMonth)}`;
+    render();
+  });
+
+  nextMonthBtn.addEventListener('click', () => {
+    currentMonth++;
+    if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+    monthPicker.value = `${currentYear}-${pad2(currentMonth)}`;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

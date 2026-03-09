@@ -66,6 +66,7 @@ router.post("/projects", auth, async (req, res) => {
       status,
       shipping_type,
       shipping_date,
+      return_due_date,
       usage_start_at,
       usage_end_at,
       usage_start,
@@ -85,11 +86,12 @@ router.post("/projects", auth, async (req, res) => {
         status,
         shipping_type,
         shipping_date,
+        return_due_date,
         usage_start,
         usage_end
       )
       VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *,
         usage_start AS usage_start_at,
         usage_end   AS usage_end_at
@@ -102,6 +104,7 @@ router.post("/projects", auth, async (req, res) => {
       status ?? "draft",
       shipping_type,
       shipping_date,
+      return_due_date,
       s.toISOString(),
       e.toISOString()
     ]);
@@ -224,6 +227,7 @@ router.put("/projects/:id", auth, async (req, res) => {
       status,
       shipping_type,
       shipping_date,
+      return_due_date,
       usage_start_at,
       usage_end_at
     } = req.body;
@@ -238,9 +242,10 @@ router.put("/projects/:id", auth, async (req, res) => {
         status=$5,
         shipping_type=$6,
         shipping_date=$7,
-        usage_start=$8,
-        usage_end=$9
-      WHERE id=$10
+        return_due_date=$8,
+        usage_start=$9,
+        usage_end=$10
+      WHERE id=$11
       RETURNING *,
         usage_start AS usage_start_at,
         usage_end   AS usage_end_at
@@ -253,6 +258,7 @@ router.put("/projects/:id", auth, async (req, res) => {
       status,
       shipping_type,
       shipping_date,
+      return_due_date,
       usage_start_at,
       usage_end_at,
       req.params.id
@@ -278,5 +284,78 @@ router.delete("/projects/:id", auth, async (req, res) => {
   res.json({ success: true });
 
 });
+/**
+ * ゴミ箱に移動（論理削除）
+ */
+router.delete("/projects/:id/trash", auth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const proj = await client.query("SELECT * FROM projects WHERE id=$1", [req.params.id]);
+    if (!proj.rows.length) return res.status(404).json({ message: "not found" });
+    const p = proj.rows[0];
+    await client.query(`
+      INSERT INTO deleted_projects
+        (original_id, title, client_name, venue, person_in_charge, status, shipping_type, shipping_date, return_due_date, usage_start, usage_end)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    `, [p.id, p.title, p.client_name, p.venue, p.person_in_charge, p.status, p.shipping_type, p.shipping_date, p.return_due_date, p.usage_start, p.usage_end]);
+    await client.query("DELETE FROM projects WHERE id=$1", [req.params.id]);
+    await client.query("COMMIT");
+    res.json({ success: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ message: err.message });
+  } finally {
+    client.release();
+  }
+});
 
+/**
+ * ゴミ箱一覧
+ */
+router.get("/trash", auth, async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM deleted_projects ORDER BY deleted_at DESC");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * ゴミ箱から完全削除
+ */
+router.delete("/trash/:id", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM deleted_projects WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+/**
+ * ゴミ箱から復元
+ */
+router.post("/trash/:id/restore", auth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query("SELECT * FROM deleted_projects WHERE id=$1", [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ message: "not found" });
+    const p = result.rows[0];
+    await client.query(`
+      INSERT INTO projects
+        (title, client_name, venue, person_in_charge, status, shipping_type, shipping_date, return_due_date, usage_start, usage_end)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `, [p.title, p.client_name, p.venue, p.person_in_charge, p.status, p.shipping_type, p.shipping_date, p.return_due_date, p.usage_start, p.usage_end]);
+    await client.query("DELETE FROM deleted_projects WHERE id=$1", [req.params.id]);
+    await client.query("COMMIT");
+    res.json({ success: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ message: err.message });
+  } finally {
+    client.release();
+  }
+});
 module.exports = router;

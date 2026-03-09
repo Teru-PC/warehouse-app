@@ -90,6 +90,7 @@
 
       <div class="actions">
         <button id="saveBtn" type="button" class="primary">保存</button>
+        <button id="trashBtn" type="button" style="padding:6px 16px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;">🗑️ ゴミ箱に移動</button>
         <button id="itemsBtn" type="button">機材割当</button>
         <button id="checklistBtn" type="button">チェックリスト</button>
       </div>
@@ -306,7 +307,13 @@
       el.status.value = p.status || "draft";
       el.shippingEnabled.value = p.shipping_type ? "yes" : "no";
       el.shippingDate.value = p.shipping_date ? String(p.shipping_date).slice(0,10) : "";
-      el.returnDueDate.value = p.return_due_date ? String(p.return_due_date).slice(0,10) : "";
+      if (p.return_due_date) {
+        const rd = new Date(p.return_due_date);
+        const jst = new Date(rd.getTime() + 9 * 60 * 60 * 1000);
+        el.returnDueDate.value = jst.toISOString().slice(0, 10);
+      } else {
+        el.returnDueDate.value = "";
+      }
       setShippingUi();
       if (!p.usage_start_at || !p.usage_end_at) {
         showError("使用開始/使用終了がDBにありません。");
@@ -358,6 +365,21 @@
       el.endTime.addEventListener("change", ()=>{ userTouchedEnd = true; validate(); });
       el.shippingEnabled.addEventListener("change", ()=>{ setShippingUi(); });
       saveBtn.addEventListener("click", save);
+      document.getElementById("trashBtn").addEventListener("click", async () => {
+        if (!projectId) return;
+        if (!confirm("この案件をゴミ箱に移動しますか？")) return;
+        try {
+          const res = await fetch(`/api/projects/${projectId}/trash`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+          });
+          if (!res.ok) throw new Error("削除に失敗しました");
+          alert("ゴミ箱に移動しました");
+          location.href = "/calendar.html";
+        } catch (e) {
+          alert(e.message);
+        }
+      });
       backBtn.addEventListener("click", ()=>location.href = returnUrl);
       itemsBtn.addEventListener("click", () => {
         location.href =
