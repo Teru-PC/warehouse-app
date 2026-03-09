@@ -220,14 +220,22 @@
     return Array.isArray(json) ? json : json.projects || [];
   }
 
+  const FIXED_ITEMS = [
+    '表示板セット', '養生テープ', 'ガムテープ（黒）', 'キャプタイヤ',
+    '電源タップ', 'アッテネーター（20db/40db）', '変換プラグ（オス-オス/メス-メス）',
+  ];
+
   async function fetchChecklist(projectId) {
     const token = localStorage.getItem('token') || '';
     const res = await fetch(`/api/project-items/detail?project_id=${projectId}`, {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.items || (Array.isArray(json) ? json : []);
+    const dbItems = res.ok ? (await res.json()).items || [] : [];
+    const fixedItems = FIXED_ITEMS.map(name => ({
+      id: null, name, equipment_name: name, quantity: null,
+      checked: false, fixed: true, image_url: null,
+    }));
+    return [...dbItems, ...fixedItems];
   }
 
   async function toggleCheckItem(projectId, itemId, checked) {
@@ -458,10 +466,12 @@
           const checked   = item.checked ? 'checked' : '';
           const nameClass = item.checked ? 'item-name checked' : 'item-name';
           const img = item.image_url ? `<img src="${item.image_url}" alt="">` : '';
-          const qty = item.quantity  ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${item.quantity}個</span>` : '';
+          const qty = item.fixed
+            ? `<span style="font-size:11px;color:#9ca3af;white-space:nowrap;">固定備品</span>`
+            : item.quantity ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${item.quantity}個</span>` : '';
           html += `
             <div class="cl-item">
-              <input type="checkbox" ${checked} data-item-id="${item.id}" data-project-id="${project.id}" />
+              ${item.fixed ? '<span style="width:16px;height:16px;display:inline-block;border:2px solid #d1d5db;border-radius:4px;cursor:pointer;flex-shrink:0;"></span>' : `<input type="checkbox" ${checked} data-item-id="${item.id}" data-project-id="${project.id}" />`}
               ${img}
               <span class="${nameClass}">${item.name || item.equipment_name || ''}</span>
               ${qty}
