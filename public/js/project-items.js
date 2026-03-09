@@ -13,20 +13,13 @@ function getToken() {
 
 async function api(path, options = {}) {
   const token = getToken();
-
-  const headers = Object.assign(
-    {},
-    options.headers || {}
-  );
-
+  const headers = Object.assign({}, options.headers || {});
   if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
-
   const res = await fetch(path, { ...options, headers });
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-
   if (!res.ok) {
     const msg = (data && data.message) ? data.message : (typeof data === "string" && data ? data : `HTTP ${res.status}`);
     throw new Error(msg);
@@ -47,31 +40,26 @@ function getReturnUrl() {
   return qs("return") || "/calendar.html?mode=week";
 }
 
-function showTopError(msg) {
-  // project-items.html 側に専用枠が無いので、projectInfoの先頭に出す
-  const info = document.getElementById("projectInfo");
-  if (!info) return;
-  const html = `
-    <div style="padding:10px; border:1px solid #ffcccc; background:#ffefef; border-radius:10px; margin-bottom:10px;">
-      ${escapeHtml(msg)}
-    </div>
-  `;
-  info.innerHTML = html + info.innerHTML;
+function formatDate(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
 }
 
 async function loadProject(projectId) {
   const p = await api(`/api/projects/${projectId}`, { method: "GET" });
   const title = p.title ?? "(無題)";
   const status = p.status ?? "";
-  const start = p.usage_start_at ?? p.usage_start ?? "";
-  const end = p.usage_end_at ?? p.usage_end ?? "";
+  const start = formatDate(p.usage_start_at ?? p.usage_start ?? "");
+  const end = formatDate(p.usage_end_at ?? p.usage_end ?? "");
   const html = `
-    <div><b>案件:</b> ${escapeHtml(title)}</div>
-    <div><b>状態:</b> ${escapeHtml(status)}</div>
-    <div><b>使用:</b> ${escapeHtml(start)} 〜 ${escapeHtml(end)}</div>
-    <div style="margin-top:8px">
-      <a href="/project-edit.html?project_id=${projectId}&return=${encodeURIComponent(getReturnUrl())}">編集画面へ</a>
-      &nbsp;|&nbsp;
+    <div style="font-size:18px; font-weight:bold; margin-bottom:6px">${escapeHtml(title)}</div>
+    <div style="color:#6b7280; font-size:14px; margin-bottom:2px">状態: ${escapeHtml(status)}</div>
+    <div style="color:#6b7280; font-size:14px; margin-bottom:8px">使用: ${escapeHtml(start)} 〜 ${escapeHtml(end)}</div>
+    <div style="display:flex; gap:12px; font-size:14px">
+      <a href="/project-edit.html?id=${projectId}&return=${encodeURIComponent(getReturnUrl())}">編集画面へ</a>
       <a href="${escapeHtml(getReturnUrl())}">戻る</a>
     </div>
   `;
@@ -86,171 +74,211 @@ function normalizeEquipmentPayload(data) {
   return [];
 }
 
+// 機材リスト（グローバル）
+let allEquipment = [];
+
+function imgOrPlaceholder(e, size = 52) {
+  if (e.image_url || e.image) {
+    return `<img src="${escapeHtml(e.image_url || e.image)}" alt="" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:8px" />`;
+  }
+  return `<div class="no-img" style="width:${size}px;height:${size}px">📦</div>`;
+}
+
 async function loadEquipmentList() {
   const raw = await api("/api/equipment", { method: "GET" });
-  const list = normalizeEquipmentPayload(raw);
+  allEquipment = normalizeEquipmentPayload(raw);
+  renderEquipList(allEquipment);
 
-  const sel = document.getElementById("equipmentSelect");
-  sel.innerHTML = "";
+  // 検索
+  document.getElementById("searchInput").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const filtered = q ? allEquipment.filter(eq => eq.name.toLowerCase().includes(q)) : allEquipment;
+    renderEquipList(filtered);
+  });
+}
 
+function renderEquipList(list) {
+  const wrap = document.getElementById("equipList");
   if (!list.length) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "機材がありません（先に機材登録してください）";
-    sel.appendChild(opt);
-    sel.disabled = true;
-
-    const addBtn = document.getElementById("addBtn");
-    const qty = document.getElementById("qtyInput");
-    if (addBtn) addBtn.disabled = true;
-    if (qty) qty.disabled = true;
+    wrap.innerHTML = '<div style="color:#6b7280;padding:12px">機材がありません</div>';
     return;
   }
 
-  sel.disabled = false;
-  const addBtn = document.getElementById("addBtn");
-  const qty = document.getElementById("qtyInput");
-  if (addBtn) addBtn.disabled = false;
-  if (qty) qty.disabled = false;
+  // 固定備品とその他でグループ分け
+  const normal = list.filter(e => !e.is_fixed);
+  const fixed  = list.filter(e => e.is_fixed);
 
-  for (const e of list) {
-    const opt = document.createElement("option");
-    opt.value = e.id;
-    opt.textContent = `${e.name}（在庫:${e.total_quantity}）`;
-    sel.appendChild(opt);
+  let html = "";
+
+  if (normal.length) {
+    html += normal.map(e => equipItemHtml(e)).join("");
   }
+  if (fixed.length) {
+    html += `<div class="equip-section-header">🔧 固定備品</div>`;
+    html += fixed.map(e => equipItemHtml(e)).join("");
+  }
+
+  wrap.innerHTML = html;
+
+  // チェックボックスのイベント
+  wrap.querySelectorAll(".equip-item").forEach(row => {
+    const cb = row.querySelector("input[type=checkbox]");
+    const qtyInput = row.querySelector("input[type=number]");
+
+    row.addEventListener("click", (ev) => {
+      if (ev.target === qtyInput) return; // 数量欄クリックは除外
+      if (ev.target === cb) return; // チェックボックス自体はそのまま
+      cb.checked = !cb.checked;
+      row.classList.toggle("checked", cb.checked);
+    });
+
+    cb.addEventListener("change", () => {
+      row.classList.toggle("checked", cb.checked);
+    });
+  });
+}
+
+function equipItemHtml(e) {
+  const stock = e.is_fixed ? "固定備品" : `在庫: ${e.total_quantity ?? 0}`;
+  return `
+    <div class="equip-item" data-id="${e.id}">
+      <input type="checkbox" class="equip-cb" data-id="${e.id}" />
+      ${imgOrPlaceholder(e, 52)}
+      <div class="info">
+        <div class="name">${escapeHtml(e.name)}</div>
+        <div class="stock">${escapeHtml(stock)}</div>
+      </div>
+      <div class="qty-wrap">
+        <input type="number" class="equip-qty" data-id="${e.id}" min="1" value="1" />
+      </div>
+    </div>
+  `;
 }
 
 async function loadItems(projectId) {
   const items = await api(`/api/project-items?project_id=${projectId}`, { method: "GET" });
+  const wrap = document.getElementById("itemsWrap");
 
   if (!items.length) {
-    document.getElementById("itemsWrap").innerHTML = "割当はまだありません。";
+    wrap.innerHTML = '<div style="color:#6b7280">割当はまだありません。</div>';
     return;
   }
 
-  const rows = items.map(it => {
+  wrap.innerHTML = items.map(it => {
+    const imgHtml = (it.image_url || it.image)
+      ? `<img src="${escapeHtml(it.image_url || it.image)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px" />`
+      : `<div class="no-img" style="width:48px;height:48px">📦</div>`;
     return `
-      <tr>
-        <td>${escapeHtml(it.equipment_name)}</td>
-        <td style="width:140px">
-          <input type="number" min="1" value="${it.quantity}" data-id="${it.id}" class="qtyEdit" style="width:110px" />
-        </td>
-        <td style="width:210px">
-          <button data-id="${it.id}" class="saveBtn">数量保存</button>
-          <button data-id="${it.id}" class="delBtn">削除</button>
-        </td>
-      </tr>
+      <div class="assigned-item">
+        ${imgHtml}
+        <div class="info">
+          <div class="name">${escapeHtml(it.equipment_name)}</div>
+          <div class="qty-row">
+            <span style="color:#6b7280;font-size:13px">数量:</span>
+            <input type="number" min="1" value="${it.quantity}" data-id="${it.id}" class="qtyEdit" />
+            <button class="btn btn-sm saveBtn" data-id="${it.id}">保存</button>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-sm btn-danger delBtn" data-id="${it.id}">削除</button>
+        </div>
+      </div>
     `;
   }).join("");
 
-  document.getElementById("itemsWrap").innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>機材</th>
-          <th>数量</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-
-  for (const btn of document.querySelectorAll(".saveBtn")) {
+  wrap.querySelectorAll(".saveBtn").forEach(btn => {
     btn.addEventListener("click", async () => {
       try {
-        const id = btn.getAttribute("data-id");
-        const input = document.querySelector(`.qtyEdit[data-id="${id}"]`);
+        const id = btn.dataset.id;
+        const input = wrap.querySelector(`.qtyEdit[data-id="${id}"]`);
         const qty = Number(input.value);
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("数量が不正です");
-        await api(`/api/project-items/${id}`, {
-          method: "PUT",
-          body: JSON.stringify({ quantity: qty })
-        });
+        await api(`/api/project-items/${id}`, { method: "PUT", body: JSON.stringify({ quantity: qty }) });
         await loadItems(projectId);
-      } catch (e) {
-        alert(e.message);
-      }
+      } catch (e) { alert(e.message); }
     });
-  }
-
-  for (const btn of document.querySelectorAll(".delBtn")) {
-    btn.addEventListener("click", async () => {
-      try {
-        const id = btn.getAttribute("data-id");
-        await api(`/api/project-items/${id}`, { method: "DELETE" });
-        await loadItems(projectId);
-      } catch (e) {
-        alert(e.message);
-      }
-    });
-  }
-}
-
-async function addItem(projectId) {
-  const sel = document.getElementById("equipmentSelect");
-  if (sel.disabled) return;
-
-  const equipmentId = Number(sel.value);
-  const qty = Number(document.getElementById("qtyInput").value);
-  const msg = document.getElementById("addMsg");
-  msg.textContent = "";
-
-  if (!Number.isFinite(equipmentId) || equipmentId <= 0) throw new Error("機材の選択が不正です");
-  if (!Number.isFinite(qty) || qty <= 0) throw new Error("数量が不正です");
-
-  await api("/api/project-items", {
-    method: "POST",
-    body: JSON.stringify({
-      project_id: projectId,
-      equipment_id: equipmentId,
-      quantity: qty
-    })
   });
 
-  msg.textContent = "追加しました。";
+  wrap.querySelectorAll(".delBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("削除しますか？")) return;
+      try {
+        await api(`/api/project-items/${btn.dataset.id}`, { method: "DELETE" });
+        await loadItems(projectId);
+      } catch (e) { alert(e.message); }
+    });
+  });
+}
+
+async function addCheckedItems(projectId) {
+  const addMsg = document.getElementById("addMsg");
+  const errorMsg = document.getElementById("errorMsg");
+  addMsg.textContent = "";
+  errorMsg.textContent = "";
+
+  const checked = document.querySelectorAll(".equip-cb:checked");
+  if (!checked.length) {
+    errorMsg.textContent = "機材にチェックを入れてください。";
+    return;
+  }
+
+  let successCount = 0;
+  const errors = [];
+
+  for (const cb of checked) {
+    const equipmentId = Number(cb.dataset.id);
+    const qtyInput = document.querySelector(`.equip-qty[data-id="${equipmentId}"]`);
+    const qty = Number(qtyInput ? qtyInput.value : 1);
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      errors.push(`ID:${equipmentId} 数量が不正`);
+      continue;
+    }
+
+    try {
+      await api("/api/project-items", {
+        method: "POST",
+        body: JSON.stringify({ project_id: projectId, equipment_id: equipmentId, quantity: qty })
+      });
+      successCount++;
+    } catch (e) {
+      errors.push(`${e.message}`);
+    }
+  }
+
+  // チェックをリセット
+  document.querySelectorAll(".equip-cb:checked").forEach(cb => {
+    cb.checked = false;
+    cb.closest(".equip-item")?.classList.remove("checked");
+  });
+  document.querySelectorAll(".equip-qty").forEach(inp => inp.value = 1);
+
+  if (successCount > 0) addMsg.textContent = `${successCount}件追加しました。`;
+  if (errors.length) errorMsg.textContent = errors.join(" / ");
+
   await loadItems(projectId);
 }
 
 async function main() {
-  if (!getToken()) {
-    location.href = "/index.html";
-    return;
-  }
+  if (!getToken()) { location.href = "/index.html"; return; }
 
   const projectId = Number(qs("project_id"));
   if (!projectId) {
-    document.body.innerHTML = "project_id がありません。URLに ?project_id=数字 を付けて開いてください。";
+    document.body.innerHTML = "project_id がありません。";
     return;
   }
 
-  const backBtn = document.getElementById("backBtn");
-  if (backBtn) backBtn.addEventListener("click", () => {
-    location.href = getReturnUrl();
-  });
-
-  const addBtn = document.getElementById("addBtn");
-  if (addBtn) addBtn.addEventListener("click", async () => {
-    try {
-      await addItem(projectId);
-    } catch (e) {
-      alert(e.message);
-    }
-  });
+  document.getElementById("backBtn").addEventListener("click", () => { location.href = getReturnUrl(); });
+  document.getElementById("addBtn").addEventListener("click", () => addCheckedItems(projectId));
 
   try {
     await loadProject(projectId);
     await loadEquipmentList();
     await loadItems(projectId);
   } catch (e) {
-    // 401/403/500などで「操作不能」になっている原因を画面に出す
-    showTopError(e.message);
-    throw e;
+    console.error(e);
+    document.getElementById("errorMsg").textContent = e.message;
   }
 }
 
-main().catch(err => {
-  // 既に画面に表示しているので、alertは最小限
-  console.error(err);
-});
+main();

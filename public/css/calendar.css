@@ -234,3 +234,20 @@
 .cal-allday-item:hover{
   filter:brightness(0.92);
 }
+
+/* ---- ドラッグプレビュー ---- */
+.cal-drag-preview{
+  position:absolute;
+  left:4px;
+  right:4px;
+  background:rgba(59,130,246,0.25);
+  border:2px solid #3b82f6;
+  border-radius:6px;
+  font-size:11px;
+  font-weight:700;
+  color:#1d4ed8;
+  padding:4px 6px;
+  pointer-events:none;
+  z-index:50;
+  box-sizing:border-box;
+}

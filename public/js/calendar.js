@@ -95,7 +95,7 @@
 
   function getRangeDays(modeName, baseKey) {
     if (modeName === "day") return [baseKey];
-    const startKey = startOfWeekMonday(baseKey);
+    const startKey = startOfWeekSunday(baseKey);
     if (modeName === "2week" || modeName === "2weeks") {
       return Array.from({ length: 14 }, (_, i) => addJstDays(startKey, i));
     }
@@ -106,6 +106,11 @@
       return Array.from({ length: daysInMonth }, (_, i) => addJstDays(first, i));
     }
     return Array.from({ length: 7 }, (_, i) => addJstDays(startKey, i));
+  }
+
+  function startOfWeekSunday(dayKey) {
+    const w = weekdayIndexInJstFromDayKey(dayKey);
+    return addJstDays(dayKey, -w);
   }
 
   function jstHmFromUtcDate(d) {
@@ -415,8 +420,104 @@
     }
   }
 
+  function renderAllDayProjects(projects, visibleDays) {
+    document.querySelectorAll(".cal-allday-item").forEach(el => el.remove());
+    document.querySelectorAll('.cal-ship-btn-area').forEach(a => {
+      a.style.position = 'relative';
+      a.style.minHeight = '';
+    });
+
+    const colW = (() => {
+      const head = document.querySelector('.cal-day-head');
+      return head ? head.getBoundingClientRect().width : 120;
+    })();
+
+    const ITEM_H = 22;
+    const ITEM_GAP = 2;
+
+    const allDayList = projects
+      .filter(function(p) { return p.is_all_day && (p.usage_start_at || p.usage_start); })
+      .map(function(p) {
+        const startIso = p.usage_start_at || p.usage_start;
+        const endIso   = p.usage_end_at   || p.usage_end;
+        const startDayKey = jstDayKeyFromUtcMs(new Date(startIso).getTime());
+        const endDayKey   = endIso
+          ? jstDayKeyFromUtcMs(new Date(new Date(endIso).getTime() - 1).getTime())
+          : startDayKey;
+        const dispStart = visibleDays.find(function(d) { return d >= startDayKey; });
+        const dispEnd   = visibleDays.slice().reverse().find(function(d) { return d <= endDayKey; }) || dispStart;
+        return { p: p, dispStart: dispStart, dispEnd: dispEnd };
+      })
+      .filter(function(x) { return x.dispStart; })
+      .sort(function(a, b) { return a.dispStart < b.dispStart ? -1 : 1; });
+
+    const rowEndKeys = [];
+    let maxRows = 0;
+
+    for (let i = 0; i < allDayList.length; i++) {
+      const item = allDayList[i];
+      const dispStart = item.dispStart;
+      const dispEnd   = item.dispEnd;
+      const p = item.p;
+
+      const startIdx = visibleDays.indexOf(dispStart);
+      const endIdx   = visibleDays.indexOf(dispEnd);
+      const spanDays = Math.max(1, endIdx - startIdx + 1);
+
+      let rowIndex = 0;
+      while (rowEndKeys[rowIndex] && rowEndKeys[rowIndex] >= dispStart) {
+        rowIndex++;
+      }
+      rowEndKeys[rowIndex] = dispEnd;
+      if (rowIndex + 1 > maxRows) maxRows = rowIndex + 1;
+
+      const startArea = document.querySelector('.cal-ship-btn-area[data-day-btns="' + dispStart + '"]');
+      if (!startArea) continue;
+
+      const btn = document.createElement('div');
+      btn.className = 'cal-allday-item';
+      if (p.color) {
+        btn.style.background = lightenColor(p.color, 60);
+        btn.style.borderColor = p.color;
+        btn.style.borderWidth = '2px';
+        btn.style.borderStyle = 'solid';
+        btn.style.color = '#333';
+      }
+      btn.style.position = 'absolute';
+      btn.style.top = (rowIndex * (ITEM_H + ITEM_GAP)) + 'px';
+      btn.style.left = '2px';
+      btn.style.width = (colW * spanDays - 8) + 'px';
+      btn.style.height = ITEM_H + 'px';
+      btn.style.overflow = 'hidden';
+      btn.style.textOverflow = 'ellipsis';
+      btn.style.whiteSpace = 'nowrap';
+      btn.style.boxSizing = 'border-box';
+      btn.style.zIndex = '5';
+      btn.style.borderRadius = '6px';
+      if (!p.color) {
+        btn.style.background = '#86efac';
+        btn.style.border = '2px solid #22c55e';
+        btn.style.color = '#14532d';
+      }
+      btn.textContent = p.title || '(無題)';
+      btn.addEventListener('click', function(ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        const ret = encodeURIComponent(location.pathname + location.search);
+        location.href = '/project-edit.html?id=' + p.id + '&return=' + ret;
+      });
+      startArea.appendChild(btn);
+    }
+
+    // 全btnAreaの高さをmaxRowsに合わせる
+    const neededH = maxRows * (ITEM_H + ITEM_GAP);
+    document.querySelectorAll('.cal-ship-btn-area').forEach(function(a) {
+      a.style.minHeight = neededH + 'px';
+    });
+  }
+
   function renderShipBtns(projects) {
-    document.querySelectorAll('.cal-ship-btn-area').forEach(a => a.innerHTML = '');
+    // 発送ボタンはカレンダーに表示しない
+    return;
     for (const p of projects) {
       if (!p.shipping_date) continue;
       const shipDayKey = p.shipping_date.slice(0, 10);
