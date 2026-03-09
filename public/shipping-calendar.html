@@ -457,11 +457,7 @@
             style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
             編集ページへ →
           </button>
-          <button onclick="deleteProject(${project.id})"
-            style="padding:4px 12px;background:#fff;color:#ef4444;border:2px solid #ef4444;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
-            🗑️ 案件削除
-          </button>
-        </div>
+          </div>
       `;
       if (!items.length) {
         html += `<div style="color:#9ca3af;font-size:13px;margin-top:16px;">チェックリストアイテムがありません</div>`;
@@ -482,7 +478,18 @@
             </div>`;
         }
       }
+      html += `
+        <div style="display:flex;justify-content:flex-end;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;">
+          <button id="deleteProjectBtn"
+            style="padding:6px 16px;background:#fff;color:#ef4444;border:2px solid #ef4444;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
+            🗑️ 案件削除
+          </button>
+        </div>
+      `;
       checklistContent.innerHTML = html;
+
+      document.getElementById('deleteProjectBtn').addEventListener('click', () => deleteProject(project.id));
+
       checklistContent.querySelectorAll('input[type=checkbox]').forEach(cb => {
         cb.addEventListener('change', async () => {
           const span = cb.parentElement.querySelector('.item-name');
