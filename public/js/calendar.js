@@ -117,30 +117,21 @@
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
   function clearChildren(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
-  // レイアウト調整
   function adjustLayout() {
     const navH = navBar ? navBar.getBoundingClientRect().height : 0;
     const headerH = dateHeaderBar ? dateHeaderBar.getBoundingClientRect().height : 0;
-
-    if (dateHeaderBar) {
-      dateHeaderBar.style.top = navH + "px";
-    }
+    if (dateHeaderBar) dateHeaderBar.style.top = navH + "px";
     if (bodyWrap) {
       bodyWrap.style.marginTop = (navH + headerH) + "px";
       bodyWrap.style.height = `calc(100vh - ${navH + headerH}px)`;
     }
     if (gridScroll) {
       gridScroll.style.height = `calc(100vh - ${navH + headerH}px)`;
-      // 上スクロール限界を0:00まで確保
       gridScroll.style.paddingTop = "0px";
       gridScroll.scrollTop = Math.max(0, gridScroll.scrollTop);
     }
-    if (dateHeaderCorner) {
-      dateHeaderCorner.style.width = TIME_W + "px";
-    }
-    if (timeCol) {
-      timeCol.style.width = TIME_W + "px";
-    }
+    if (dateHeaderCorner) dateHeaderCorner.style.width = TIME_W + "px";
+    if (timeCol) timeCol.style.width = TIME_W + "px";
   }
 
   function buildTimeCol(days) {
@@ -162,7 +153,6 @@
     clearChildren(daysHeader);
     const colW = Math.max(COL_W, Math.floor((window.innerWidth - TIME_W) / days.length));
     daysHeader.style.gridAutoColumns = colW + "px";
-
     for (const dayKey of days) {
       const [y, mo, d] = dayKey.split("-").map(Number);
       const w = weekdayIndexInJstFromDayKey(dayKey);
@@ -173,16 +163,13 @@
       head.style.minWidth = colW + "px";
       if (w === 6) head.classList.add("is-sat");
       if (w === 0) head.classList.add("is-sun");
-
       const label = document.createElement("div");
       label.textContent = `${mo}/${d}(${wd})`;
       head.appendChild(label);
-
       const btnArea = document.createElement("div");
       btnArea.className = "cal-ship-btn-area";
       btnArea.dataset.dayBtns = dayKey;
       head.appendChild(btnArea);
-
       daysHeader.appendChild(head);
     }
   }
@@ -191,7 +178,6 @@
     clearChildren(daysGrid);
     const colW = Math.max(COL_W, Math.floor((window.innerWidth - TIME_W) / days.length));
     daysGrid.style.gridAutoColumns = colW + "px";
-
     for (const dayKey of days) {
       const col = document.createElement("div");
       col.className = "cal-day-col";
@@ -385,13 +371,15 @@
           el.classList.add(`cal-color--${s.color_key}`);
         }
         el.style.color = '#333333';
-el.style.textShadow = '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff';
-el.textContent = s.title;
+        el.style.textShadow = '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff';
+        el.textContent = s.title;
         el.style.top = `${(s.startMin / DAY_MIN) * 100}%`;
         el.style.height = `${((s.endMin - s.startMin) / DAY_MIN) * 100}%`;
         el.style.left = `calc(${s.colIndex * 16}px + ${GUTTER_PX}px)`;
         el.style.width = `calc(100% - ${s.colIndex * 16}px - ${GUTTER_PX * 2}px)`;
+        el.dataset.id = s.id;
         el.addEventListener("click", ev => {
+          if (suppressNextClick) { suppressNextClick = false; ev.preventDefault(); ev.stopPropagation(); return; }
           ev.preventDefault(); ev.stopPropagation();
           const ret = encodeURIComponent(location.pathname + location.search);
           location.href = `/project-edit.html?id=${s.id}&return=${ret}`;
@@ -434,20 +422,103 @@ el.textContent = s.title;
       setActiveModeBtn(mode);
       if (datePicker) datePicker.value = baseKey;
 
-      // レイアウト調整
       adjustLayout();
-
       buildTimeCol(days);
       buildDaysHeader(days);
       buildDaysGrid(days);
 
-      // 再調整（ヘッダー高さが確定後）
       requestAnimationFrame(() => {
         adjustLayout();
+
         // 横スクロール同期
         gridScroll.addEventListener("scroll", () => {
           dateHeaderScroll.scrollLeft = gridScroll.scrollLeft;
           timeCol.scrollTop = gridScroll.scrollTop;
+        });
+
+        // ドラッグでスクロール（案件ブロック長押し含む）
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragScrollLeft = 0;
+        let dragScrollTop = 0;
+        let dragMoved = false;
+        let longPressTimer = null;
+        let pendingProjectClick = null;
+
+        // 文字選択を無効化
+        gridScroll.style.userSelect = 'none';
+        let suppressNextClick = false;
+
+        gridScroll.addEventListener('mousedown', ev => {
+          if (ev.button !== 0) return;
+          const projectEl = ev.target.closest('.cal-project');
+
+          dragStartX = ev.clientX;
+          dragStartY = ev.clientY;
+          dragScrollLeft = gridScroll.scrollLeft;
+          dragScrollTop = gridScroll.scrollTop;
+          dragMoved = false;
+
+          if (projectEl) {
+            // 案件ブロック：300ms長押しでスクロールモードに
+            pendingProjectClick = projectEl;
+            longPressTimer = setTimeout(() => {
+              isDragging = true;
+              pendingProjectClick = null;
+              gridScroll.style.cursor = 'grabbing';
+            }, 300);
+          } else {
+            isDragging = true;
+            gridScroll.style.cursor = 'grabbing';
+            ev.preventDefault();
+          }
+        });
+
+        document.addEventListener('mousemove', ev => {
+          const dx = ev.clientX - dragStartX;
+          const dy = ev.clientY - dragStartY;
+          if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+
+          if (!isDragging) {
+            // 案件ブロック上でも少し動いたらスクロールモードに切り替え
+            if (pendingProjectClick && dragMoved) {
+              clearTimeout(longPressTimer);
+              isDragging = true;
+              pendingProjectClick = null;
+              gridScroll.style.cursor = 'grabbing';
+            }
+            return;
+          }
+          gridScroll.scrollLeft = dragScrollLeft - dx;
+          gridScroll.scrollTop  = dragScrollTop  - dy;
+        });
+
+        document.addEventListener('mouseup', ev => {
+          clearTimeout(longPressTimer);
+          gridScroll.style.cursor = '';
+
+          if (pendingProjectClick && !dragMoved) {
+            // クリック（スクロールなし）のみ編集ページへ
+            const projectEl = pendingProjectClick;
+            pendingProjectClick = null;
+            isDragging = false;
+            const id = projectEl.dataset && projectEl.dataset.id
+              ? projectEl.dataset.id
+              : projectEl.closest('[data-id]') && projectEl.closest('[data-id]').dataset.id;
+            if (id) {
+              const ret = encodeURIComponent(location.pathname + location.search);
+              location.href = `/project-edit.html?id=${id}&return=${ret}`;
+            }
+          } else if (dragMoved) {
+            // スクロールした場合はclickイベントを抑制
+            suppressNextClick = true;
+            pendingProjectClick = null;
+          }
+
+          pendingProjectClick = null;
+          isDragging = false;
+          dragMoved = false;
         });
       });
 
@@ -479,15 +550,8 @@ el.textContent = s.title;
       renderShipBtns(projects);
       renderAllDayProjects(projects, days);
 
-      // 終日エリアの高さ分グリッドを調整
-      requestAnimationFrame(() => {
-        const headerEl = document.querySelector('.cal-day-head');
-        if (headerEl) {
-          const headerH = headerEl.getBoundingClientRect().height;
-          const dateHeaderBarH = dateHeaderBar ? dateHeaderBar.getBoundingClientRect().height : 0;
-          adjustLayout();
-        }
-      });
+      // 終日エリア高さ調整後にlayout再計算
+      requestAnimationFrame(() => { adjustLayout(); });
 
       // 7:00にスクロール
       gridScroll.scrollTop = CELL_H * 14;
