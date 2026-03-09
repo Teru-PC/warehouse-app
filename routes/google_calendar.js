@@ -140,8 +140,8 @@ async function importFromGoogle() {
       const usageStart = new Date(startStr);
       const usageEnd   = new Date(endStr);
 
-      // 終日イベント（時間なし）はスキップ
-      if (!event.start?.dateTime) continue;
+      // 終日イベントかどうかを記録
+      const isAllDay = !event.start?.dateTime;
 
       // ✅ Googleカレンダー公式カラーマップ（colorId → hex）
       // 正しい対応: 1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana,
@@ -170,17 +170,18 @@ async function importFromGoogle() {
       // 案件として登録
       await pool.query(`
         INSERT INTO projects
-          (title, venue, status, usage_start, usage_end, google_event_id, memo, color)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          (title, venue, status, usage_start, usage_end, google_event_id, memo, color, is_all_day)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [
         event.summary || "(無題)",
         event.location || "",
-        "draft",
+        "confirmed",
         usageStart.toISOString(),
         usageEnd.toISOString(),
         event.id,
         event.description || "",
-        googleColor
+        googleColor,
+        isAllDay
       ]);
 
       importedCount++;

@@ -128,7 +128,12 @@
     if (bodyWrap) {
       bodyWrap.style.marginTop = (navH + headerH) + "px";
       bodyWrap.style.height = `calc(100vh - ${navH + headerH}px)`;
-    if (gridScroll) gridScroll.style.height = `calc(100vh - ${navH + headerH}px)`;
+    }
+    if (gridScroll) {
+      gridScroll.style.height = `calc(100vh - ${navH + headerH}px)`;
+      // 上スクロール限界を0:00まで確保
+      gridScroll.style.paddingTop = "0px";
+      gridScroll.scrollTop = Math.max(0, gridScroll.scrollTop);
     }
     if (dateHeaderCorner) {
       dateHeaderCorner.style.width = TIME_W + "px";
@@ -288,12 +293,46 @@
     return `rgb(${r},${g},${b})`;
   }
 
+  function renderAllDayProjects(projects, visibleDays) {
+    document.querySelectorAll(".cal-allday-item").forEach(el => el.remove());
+    for (const p of projects) {
+      if (!p.is_all_day) continue;
+      const startIso = p.usage_start_at || p.usage_start;
+      if (!startIso) continue;
+      const startDayKey = jstDayKeyFromUtcMs(new Date(startIso).getTime());
+      const btnArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${startDayKey}"]`);
+      if (!btnArea) continue;
+      const btn = document.createElement('div');
+      btn.className = 'cal-allday-item';
+      if (p.color) {
+        btn.style.background = lightenColor(p.color, 60);
+        btn.style.borderColor = p.color;
+        btn.style.borderWidth = '2px';
+        btn.style.borderStyle = 'solid';
+        btn.style.color = '#333';
+      }
+      btn.style.width = '100%';
+      btn.style.overflow = 'hidden';
+      btn.style.textOverflow = 'ellipsis';
+      btn.style.whiteSpace = 'nowrap';
+      btn.style.boxSizing = 'border-box';
+      btn.textContent = p.title || '(無題)';
+      btn.addEventListener('click', ev => {
+        ev.preventDefault(); ev.stopPropagation();
+        const ret = encodeURIComponent(location.pathname + location.search);
+        location.href = `/project-edit.html?id=${p.id}&return=${ret}`;
+      });
+      btnArea.appendChild(btn);
+    }
+  }
+
   function renderProjects(projects, visibleDays, shortageMap = new Map()) {
     document.querySelectorAll(".cal-project").forEach(el => el.remove());
     const visibleSet = new Set(visibleDays);
     const segmentsByDay = new Map();
 
     for (const p of projects) {
+      if (p.is_all_day) continue;
       const startIso = p.usage_start_at || p.usage_start;
       const endIso = p.usage_end_at || p.usage_end;
       if (!startIso || !endIso) continue;
@@ -438,6 +477,17 @@ el.textContent = s.title;
       const [projects, shortageMap] = await Promise.all([fetchProjects(), fetchShortages(days)]);
       renderProjects(projects, days, shortageMap);
       renderShipBtns(projects);
+      renderAllDayProjects(projects, days);
+
+      // 終日エリアの高さ分グリッドを調整
+      requestAnimationFrame(() => {
+        const headerEl = document.querySelector('.cal-day-head');
+        if (headerEl) {
+          const headerH = headerEl.getBoundingClientRect().height;
+          const dateHeaderBarH = dateHeaderBar ? dateHeaderBar.getBoundingClientRect().height : 0;
+          adjustLayout();
+        }
+      });
 
       // 7:00にスクロール
       gridScroll.scrollTop = CELL_H * 14;
