@@ -86,6 +86,7 @@
           <label>返却予定日</label>
           <input id="returnDueDate" type="date" />
         </div>
+        
       </div>
 
       <div class="actions">
@@ -93,6 +94,11 @@
         <button id="trashBtn" type="button" style="padding:6px 16px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;">🗑️ ゴミ箱に移動</button>
         <button id="itemsBtn" type="button">機材割当</button>
         <button id="checklistBtn" type="button">チェックリスト</button>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label style="font-size:12px; color:#374151; display:block; margin-bottom:6px;">メモ</label>
+        <textarea id="memo" rows="20" style="width:100%; padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; resize:vertical; font-size:14px; box-sizing:border-box;"></textarea>
       </div>
 
       <div id="shortageArea" style="margin-top:12px; display:none;">
@@ -125,6 +131,7 @@
       shippingEnabled: document.getElementById("shippingEnabled"),
       shippingDate: document.getElementById("shippingDate"),
       returnDueDate: document.getElementById("returnDueDate"),
+      memo: document.getElementById("memo"),
     };
 
     let userTouchedEnd = false;
@@ -305,6 +312,7 @@
       el.clientName.value = p.client_name || "";
       el.venue.value = p.venue || "";
       el.status.value = p.status || "draft";
+      el.memo.value = p.memo || "";
       el.shippingEnabled.value = p.shipping_type ? "yes" : "no";
       el.shippingDate.value = p.shipping_date ? String(p.shipping_date).slice(0,10) : "";
       if (p.return_due_date) {
@@ -346,6 +354,7 @@
         shipping_type: shipEnabled ? "carry" : null,
         shipping_date: shipEnabled ? (el.shippingDate.value || null) : null,
         return_due_date: el.returnDueDate.value || null,
+        memo: el.memo.value.trim(),
         usage_start_at: t.sIso,
         usage_end_at: t.eIso,
       };
