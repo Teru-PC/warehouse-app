@@ -398,8 +398,7 @@
           block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
           block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
           block.title = `発送〜本番: ${p.title}`;
-          block.addEventListener('mousedown', ev => { if (ev.button !== 0) return; ev.stopPropagation(); });
-          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; ev.stopPropagation(); openChecklist(p); });
+          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
           td.appendChild(block);
           row.appendChild(td);
           continue;
@@ -408,7 +407,7 @@
         // 本番ブロック（colspan付き）
         if (eventStart && day === eventStart && eventSpanCount > 0) {
           td.colSpan = eventSpanCount;
-          const block = makeBlock('event-day', `🎬 ${p.title || ''} ${startTime}〜${endTime}`, `本番日: ${p.title}`, false, () => { location.href = `/project-edit.html?id=${p.id}&return=${encodeURIComponent(location.pathname + location.search)}`; });
+          const block = makeBlock('event-day', `🎬 ${p.title || ''} ${startTime}〜${endTime}`, `本番日: ${p.title}`, false, () => openChecklist(p));
           td.appendChild(block);
           row.appendChild(td);
           continue;
@@ -422,8 +421,7 @@
           block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
           block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
           block.title = `返却期間: ${p.title}`;
-          block.addEventListener('mousedown', ev => { if (ev.button !== 0) return; ev.stopPropagation(); });
-          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; ev.stopPropagation(); openChecklist(p); });
+          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
           td.appendChild(block);
           row.appendChild(td);
           continue;
@@ -527,6 +525,7 @@
   document.addEventListener('mouseup', () => {
     isDragging = false;
     timelinePane.style.cursor = '';
+    setTimeout(() => { dragMoved = false; }, 0);
   });
 
   monthPicker.addEventListener('change', () => {
