@@ -280,6 +280,14 @@
     return result;
   }
 
+  function lightenColor(hex, amount) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.min(255, (num >> 16) + amount);
+    const g = Math.min(255, ((num >> 8) & 0xff) + amount);
+    const b = Math.min(255, (num & 0xff) + amount);
+    return `rgb(${r},${g},${b})`;
+  }
+
   function renderProjects(projects, visibleDays, shortageMap = new Map()) {
     document.querySelectorAll(".cal-project").forEach(el => el.remove());
     const visibleSet = new Set(visibleDays);
@@ -307,7 +315,7 @@
           const seg = {
             id: p.id, title: p.title || "(no title)", status: p.status || "draft",
             shortage: shortageMap.has(p.id) ? shortageMap.get(p.id) : Boolean(p.shortage),
-            dayKey, color_key: p.color_key || null,
+            dayKey, color_key: p.color_key || null, color: p.color || null, textColor: '#ffffff',
             startMin: clamp(isFirst ? startMin : 0, 0, DAY_MIN),
             endMin: clamp(isLast ? endMin : DAY_MIN, 0, DAY_MIN),
           };
@@ -330,12 +338,20 @@
         const el = document.createElement("div");
         el.className = `cal-project ${s.status}`;
         if (s.shortage) el.classList.add("cal-project--shortage");
-        if (s.color_key) el.classList.add(`cal-color--${s.color_key}`);
-        el.textContent = s.title;
+        if (s.color) {
+          el.style.border = `2px solid ${s.color}`;
+          el.style.background = lightenColor(s.color, 60);
+          el.style.color = '#333333';
+        } else if (s.color_key) {
+          el.classList.add(`cal-color--${s.color_key}`);
+        }
+        el.style.color = '#333333';
+el.style.textShadow = '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff';
+el.textContent = s.title;
         el.style.top = `${(s.startMin / DAY_MIN) * 100}%`;
         el.style.height = `${((s.endMin - s.startMin) / DAY_MIN) * 100}%`;
-        el.style.left = `calc(${(s.colIndex / s.colCount) * 100}% + ${GUTTER_PX}px)`;
-        el.style.width = `calc(${(1 / s.colCount) * 100}% - ${GUTTER_PX * 2}px)`;
+        el.style.left = `calc(${s.colIndex * 16}px + ${GUTTER_PX}px)`;
+        el.style.width = `calc(100% - ${s.colIndex * 16}px - ${GUTTER_PX * 2}px)`;
         el.addEventListener("click", ev => {
           ev.preventDefault(); ev.stopPropagation();
           const ret = encodeURIComponent(location.pathname + location.search);

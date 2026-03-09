@@ -159,6 +159,7 @@
         <a class="cal-nav-btn" href="/equipment.html" style="text-decoration:none;text-align:center;line-height:2;">機材管理</a>
         <a class="cal-nav-btn" href="/shipping-calendar.html" style="text-decoration:none;text-align:center;line-height:2;">発送確認</a>
 <a class="cal-nav-btn" href="/trash.html" style="text-decoration:none;text-align:center;line-height:2;background:#fee2e2;color:#b91c1c;border-color:#fca5a5;">🗑️ ゴミ箱</a>
+<button class="cal-nav-btn" id="gcalBtn" style="background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7;">📅 Gカレンダー連携</button>
         <span class="cal-error" id="errorText"></span>
       </div>
       <button class="cal-nav-btn" id="nextBtn" type="button">進む</button>
@@ -190,6 +191,53 @@
   <script src="/js/calendar.js"></script>
   <script>
     const user = window.authUtils ? window.authUtils.getUser() : null;
+
+
+    // Googleカレンダー連携
+document.getElementById('gcalBtn').addEventListener('click', async () => {
+  const token = localStorage.getItem('token') || '';
+  const statusRes = await fetch('/api/google/status', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const status = await statusRes.json();
+
+  if (!status.connected) {
+    // 未連携の場合は認証画面を開く
+    const authRes = await fetch('/api/auth/google', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const { url } = await authRes.json();
+    const popup = window.open(url, 'google-auth', 'width=500,height=600');
+    window.addEventListener('message', async (e) => {
+      if (e.data === 'google-auth-success') {
+        popup.close();
+        await runImport(token);
+      }
+    }, { once: true });
+  } else {
+    await runImport(token);
+  }
+});
+
+async function runImport(token) {
+  const btn = document.getElementById('gcalBtn');
+  btn.textContent = '⏳ インポート中...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/google/import', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    alert(`インポート完了！ ${data.imported}件の案件を追加しました`);
+    location.reload();
+  } catch (e) {
+    alert('インポートに失敗しました: ' + e.message);
+  } finally {
+    btn.textContent = '📅 Gカレンダー連携';
+    btn.disabled = false;
+  }
+}
   </script>
 </body>
 </html>
