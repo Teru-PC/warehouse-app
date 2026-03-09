@@ -281,13 +281,37 @@
 
   function renderAllDayProjects(projects, visibleDays) {
     document.querySelectorAll(".cal-allday-item").forEach(el => el.remove());
+
+    // 列幅を取得
+    const colW = (() => {
+      const head = document.querySelector('.cal-day-head');
+      return head ? head.getBoundingClientRect().width : 120;
+    })();
+
     for (const p of projects) {
       if (!p.is_all_day) continue;
       const startIso = p.usage_start_at || p.usage_start;
+      const endIso   = p.usage_end_at   || p.usage_end;
       if (!startIso) continue;
+
       const startDayKey = jstDayKeyFromUtcMs(new Date(startIso).getTime());
-      const btnArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${startDayKey}"]`);
-      if (!btnArea) continue;
+      // 終日イベントのendは翌日0:00なので1ms引く
+      const endDayKey = endIso
+        ? jstDayKeyFromUtcMs(new Date(new Date(endIso).getTime() - 1).getTime())
+        : startDayKey;
+
+      // 表示範囲内の開始・終了日
+      const dispStart = visibleDays.find(d => d >= startDayKey);
+      if (!dispStart) continue;
+      const dispEnd = [...visibleDays].reverse().find(d => d <= endDayKey) || dispStart;
+
+      const startIdx = visibleDays.indexOf(dispStart);
+      const endIdx   = visibleDays.indexOf(dispEnd);
+      const spanDays = Math.max(1, endIdx - startIdx + 1);
+
+      const startArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${dispStart}"]`);
+      if (!startArea) continue;
+
       const btn = document.createElement('div');
       btn.className = 'cal-allday-item';
       if (p.color) {
@@ -297,18 +321,20 @@
         btn.style.borderStyle = 'solid';
         btn.style.color = '#333';
       }
-      btn.style.width = '100%';
+      btn.style.width = `${colW * spanDays - 8}px`;
       btn.style.overflow = 'hidden';
       btn.style.textOverflow = 'ellipsis';
       btn.style.whiteSpace = 'nowrap';
       btn.style.boxSizing = 'border-box';
+      btn.style.position = 'relative';
+      btn.style.zIndex = '5';
       btn.textContent = p.title || '(無題)';
       btn.addEventListener('click', ev => {
         ev.preventDefault(); ev.stopPropagation();
         const ret = encodeURIComponent(location.pathname + location.search);
         location.href = `/project-edit.html?id=${p.id}&return=${ret}`;
       });
-      btnArea.appendChild(btn);
+      startArea.appendChild(btn);
     }
   }
 
@@ -445,15 +471,13 @@
         let dragMoved = false;
         let longPressTimer = null;
         let pendingProjectClick = null;
-
-        // 文字選択を無効化
-        gridScroll.style.userSelect = 'none';
         let suppressNextClick = false;
+
+        gridScroll.style.userSelect = 'none';
 
         gridScroll.addEventListener('mousedown', ev => {
           if (ev.button !== 0) return;
           const projectEl = ev.target.closest('.cal-project');
-
           dragStartX = ev.clientX;
           dragStartY = ev.clientY;
           dragScrollLeft = gridScroll.scrollLeft;
@@ -461,7 +485,6 @@
           dragMoved = false;
 
           if (projectEl) {
-            // 案件ブロック：300ms長押しでスクロールモードに
             pendingProjectClick = projectEl;
             longPressTimer = setTimeout(() => {
               isDragging = true;
@@ -481,7 +504,6 @@
           if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
 
           if (!isDragging) {
-            // 案件ブロック上でも少し動いたらスクロールモードに切り替え
             if (pendingProjectClick && dragMoved) {
               clearTimeout(longPressTimer);
               isDragging = true;
@@ -499,19 +521,15 @@
           gridScroll.style.cursor = '';
 
           if (pendingProjectClick && !dragMoved) {
-            // クリック（スクロールなし）のみ編集ページへ
             const projectEl = pendingProjectClick;
             pendingProjectClick = null;
             isDragging = false;
-            const id = projectEl.dataset && projectEl.dataset.id
-              ? projectEl.dataset.id
-              : projectEl.closest('[data-id]') && projectEl.closest('[data-id]').dataset.id;
+            const id = projectEl.dataset.id;
             if (id) {
               const ret = encodeURIComponent(location.pathname + location.search);
               location.href = `/project-edit.html?id=${id}&return=${ret}`;
             }
           } else if (dragMoved) {
-            // スクロールした場合はclickイベントを抑制
             suppressNextClick = true;
             pendingProjectClick = null;
           }

@@ -72,6 +72,21 @@ router.get("/google/status", auth, async (req, res) => {
 /**
  * Googleカレンダーから案件をインポート
  */
+function stripHtml(html) {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 async function importFromGoogle() {
   try {
     const result = await pool.query("SELECT * FROM google_tokens WHERE id=1");
@@ -179,7 +194,7 @@ async function importFromGoogle() {
         usageStart.toISOString(),
         usageEnd.toISOString(),
         event.id,
-        event.description || "",
+        stripHtml(event.description || ""),
         googleColor,
         isAllDay
       ]);
