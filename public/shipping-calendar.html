@@ -194,18 +194,23 @@
     }
     .block:hover { filter: brightness(0.92); }
 
-    /* ステータス別色 */
-    .block.draft        { background: #93c5fd; color: #1e3a5f; }
-    .block.confirmed    { background: #86efac; color: #14532d; }
-    .block.cancelled    { background: #fca5a5; color: #7f1d1d; }
+    
 
-    /* 発送・返却期間は薄い色 */
-    .block.draft.light     { background: #dbeafe; color: #1e3a5f; }
-    .block.confirmed.light { background: #dcfce7; color: #14532d; }
-    .block.cancelled.light { background: #fee2e2; color: #7f1d1d; }
+    /* 発送・返却期間は薄い色（p.colorがない場合のみ適用） */
+    .block.draft.light:not([style*="border"])     { background: #dbeafe; color: #1e3a5f; }
+    .block.confirmed.light:not([style*="border"]) { background: #dcfce7; color: #14532d; }
+    .block.cancelled.light:not([style*="border"]) { background: #fee2e2; color: #7f1d1d; }
+
+    /* ステータス別色（p.colorがない場合のみ適用） */
+    .block.draft:not([style*="border"])        { background: #93c5fd; color: #1e3a5f; }
+    .block.confirmed:not([style*="border"])    { background: #86efac; color: #14532d; }
+    .block.cancelled:not([style*="border"])    { background: #fca5a5; color: #7f1d1d; }
 
     /* 本番日は左右に丸み */
     .block.event-day { border-radius: 6px; font-size: 11px; }
+
+    /* Googleカレンダー色上書き用 */
+    .block.has-color { background: var(--block-bg) !important; border: var(--block-border) !important; color: #333333 !important; }
 
     /* ローディング */
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
@@ -444,6 +449,10 @@
         if (blockType) {
           const block = document.createElement('div');
           block.className = `block ${status}`;
+          if (p.color) {
+            const lightBg = lightenColor(p.color, 60);
+            block.setAttribute('style', `background:${lightBg} !important; border:2px solid ${p.color} !important; color:#333333 !important; text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;`);
+          }
 
           if (blockType === 'ship') {
             block.classList.add('light');
@@ -530,6 +539,14 @@
     } catch (e) {
       checklistContent.innerHTML = `<div style="color:#b91c1c;">チェックリストの取得に失敗しました</div>`;
     }
+  }
+
+  function lightenColor(hex, amount) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.min(255, (num >> 16) + amount);
+    const g = Math.min(255, ((num >> 8) & 0xff) + amount);
+    const b = Math.min(255, (num & 0xff) + amount);
+    return `rgb(${r},${g},${b})`;
   }
 
   async function render() {
