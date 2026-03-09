@@ -147,12 +147,18 @@ async function importFromGoogle() {
       );
       if (existing.rows.length) continue;
 
-      // ゴミ箱に移動済みの場合もスキップ
-      const deleted = await pool.query(
+      // ゴミ箱に移動済みの場合もスキップ（google_event_id or タイトル+日時で判定）
+      const deletedByEventId = await pool.query(
         "SELECT id FROM deleted_projects WHERE google_event_id=$1",
         [event.id]
       );
-      if (deleted.rows.length) continue;
+      if (deletedByEventId.rows.length) continue;
+
+      const deletedByTitle = await pool.query(
+        "SELECT id FROM deleted_projects WHERE title=$1 AND usage_start=$2",
+        [event.summary || "(無題)", new Date(startStr).toISOString()]
+      );
+      if (deletedByTitle.rows.length) continue;
 
       // 日時の取得
       const startStr = event.start?.dateTime || event.start?.date;
