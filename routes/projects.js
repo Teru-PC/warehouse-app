@@ -296,9 +296,9 @@ router.delete("/projects/:id/trash", auth, async (req, res) => {
     const p = proj.rows[0];
     await client.query(`
       INSERT INTO deleted_projects
-        (original_id, title, client_name, venue, person_in_charge, status, shipping_type, shipping_date, return_due_date, usage_start, usage_end)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-    `, [p.id, p.title, p.client_name, p.venue, p.person_in_charge, p.status, p.shipping_type, p.shipping_date, p.return_due_date, p.usage_start, p.usage_end]);
+        (original_id, title, client_name, venue, person_in_charge, status, shipping_type, shipping_date, return_due_date, usage_start, usage_end, google_event_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    `, [p.id, p.title, p.client_name, p.venue, p.person_in_charge, p.status, p.shipping_type, p.shipping_date, p.return_due_date, p.usage_start, p.usage_end, p.google_event_id || null]);
     await client.query("DELETE FROM projects WHERE id=$1", [req.params.id]);
     await client.query("COMMIT");
     res.json({ success: true });

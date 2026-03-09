@@ -147,6 +147,13 @@ async function importFromGoogle() {
       );
       if (existing.rows.length) continue;
 
+      // ゴミ箱に移動済みの場合もスキップ
+      const deleted = await pool.query(
+        "SELECT id FROM deleted_projects WHERE google_event_id=$1",
+        [event.id]
+      );
+      if (deleted.rows.length) continue;
+
       // 日時の取得
       const startStr = event.start?.dateTime || event.start?.date;
       const endStr   = event.end?.dateTime   || event.end?.date;
