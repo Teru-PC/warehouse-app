@@ -4,11 +4,12 @@
   <script src="/js/auth.js"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>発送確認カレンダー</title>
+  <title>通訳カレンダー</title>
   <link rel="icon" href="data:," />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; background: #f8fafc; color: #111827; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    #pageWrap { display: flex; flex: 1; overflow: hidden; }
 
     #navBar {
       background: #fff;
@@ -19,6 +20,7 @@
       align-items: center;
       flex-shrink: 0;
       z-index: 100;
+      gap: 8px;
     }
     .nav-btn {
       padding: 4px 10px;
@@ -28,137 +30,166 @@
       cursor: pointer;
       font-weight: 600;
       font-size: 13px;
+      white-space: nowrap;
     }
     .nav-btn:hover { background: #f3f4f6; }
-    #monthPicker {
-      padding: 4px 8px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-    }
     #errorText { color: #b91c1c; font-size: 12px; }
+    #rangeLabel { font-size: 13px; font-weight: 600; color: #374151; min-width: 200px; text-align: center; }
 
     #zoomControls {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-left: 12px;
+      display: flex; align-items: center; gap: 4px; margin-left: 4px;
     }
     #zoomControls button {
-      padding: 2px 8px;
-      border: 1px solid #e5e7eb;
-      background: #fff;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 1.4;
+      padding: 2px 8px; border: 1px solid #e5e7eb; background: #fff;
+      border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 700; line-height: 1.4;
     }
     #zoomControls button:hover { background: #f3f4f6; }
     #zoomLabel { font-size: 12px; color: #6b7280; min-width: 36px; text-align: center; }
 
-    #mainLayout { display: flex; flex: 1; overflow: hidden; }
+    #mainPane { flex: 1; overflow: auto; }
 
-    #timelinePane { flex: 1; overflow: auto; border-right: 2px solid #e5e7eb; }
-
-    #checklistPane {
-      width: 0;
-      flex-shrink: 0;
-      overflow-y: auto;
-      overflow-x: hidden;
-      background: #fff;
-      padding: 0;
-      transition: width 0.2s ease, padding 0.2s ease;
-    }
-    #checklistPane.open {
-      width: 360px;
-      padding: 16px;
-      border-left: 2px solid #e5e7eb;
-    }
-    #checklistPane h2 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #1e40af; }
-    #checklistPane .meta { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
-
-    .cl-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
-    .cl-item input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
-    .cl-item .item-name { flex: 1; font-size: 13px; }
-    .cl-item .item-name.checked { text-decoration: line-through; color: #9ca3af; }
-    .cl-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; flex-shrink: 0; }
+    #zoomWrapper { transform-origin: top left; }
 
     #calTable { border-collapse: collapse; white-space: nowrap; }
 
     #calTable thead th {
       position: sticky; top: 0; background: #fff; z-index: 20;
       border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700;
-      padding: 4px 6px; text-align: center; min-width: 36px;
+      padding: 4px 6px; text-align: center; min-width: 80px;
     }
-    #calTable thead th.th-project {
+    #calTable thead th.th-staff {
       position: sticky; top: 0; left: 0; z-index: 30;
-      min-width: 160px; text-align: left; padding-left: 8px;
+      min-width: 100px; max-width: 100px; text-align: left; padding-left: 8px;
+      background: #fff;
     }
     #calTable thead th.is-sat { background: #eaf3ff; }
     #calTable thead th.is-sun { background: #ffecec; }
     #calTable thead th.is-today { background: #fef9c3; }
+    #calTable thead th.sortable { cursor: pointer; user-select: none; }
+    #calTable thead th.sortable:hover { background: #f0f9ff; }
+    #calTable thead th.sorted { background: #dbeafe !important; }
+    #calTable thead th .sort-indicator { font-size: 9px; color: #3b82f6; margin-left: 2px; }
 
-    #calTable tbody td.td-project {
+    #calTable tbody td.td-staff {
       position: sticky; left: 0; z-index: 10; background: #fff;
       border: 1px solid #e5e7eb; font-size: 12px; font-weight: 700;
-      padding: 4px 8px; min-width: 160px; max-width: 160px;
-      overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+      padding: 4px 8px; min-width: 100px; max-width: 100px;
+      overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    #calTable tbody td.td-project:hover { background: #f3f4f6; }
+    #calTable tbody tr.has-sort td.td-staff { background: #eff6ff; }
 
     #calTable tbody td.td-day {
-      border: 1px solid #e5e7eb; padding: 0;
-      height: 36px; min-width: 36px; vertical-align: middle;
+      border: 1px solid #e5e7eb; padding: 2px;
+      min-width: 80px; vertical-align: top;
     }
     #calTable tbody td.is-sat { background: #f6fbff; }
     #calTable tbody td.is-sun { background: #fff7f7; }
     #calTable tbody td.is-today { background: #fefce8; }
 
-    .block {
-      height: 100%; display: flex; align-items: center;
-      padding: 2px 6px; font-size: 10px; font-weight: 700;
-      cursor: pointer; overflow: hidden; text-overflow: ellipsis;
-      white-space: nowrap; border-radius: 0;
+    /* イベントブロック */
+    .ev-block {
+      border-radius: 6px;
+      padding: 3px 5px;
+      margin: 1px 0;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.3;
+      overflow: hidden;
+      user-select: none;
     }
-    .block:hover { filter: brightness(0.92); }
-
-    .block.draft        { background: #93c5fd; color: #1e3a5f; }
-    .block.confirmed    { background: #86efac; color: #14532d; }
-    .block.cancelled    { background: #fca5a5; color: #7f1d1d; }
-
-    .block.draft.light        { background: #dbeafe; color: #1e3a5f; }
-    .block.confirmed.light    { background: #dcfce7; color: #14532d; }
-    .block.cancelled.light    { background: #fee2e2; color: #7f1d1d; }
-
-    .block.event-day { border-radius: 6px; font-size: 11px; }
-    .block.light     { border-radius: 6px; }
+    .ev-block:hover { filter: brightness(0.92); }
+    .ev-block .ev-title {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 10px; font-weight: 700;
+    }
+    .ev-block .ev-time {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 9px; font-weight: 400; opacity: 0.85; margin-top: 1px;
+    }
+    .ev-block.draft     { background: #bfdbfe; color: #1e3a5f; border: 1px solid #93c5fd; }
+    .ev-block.confirmed { background: #bbf7d0; color: #14532d; border: 1px solid #86efac; }
+    .ev-block.cancelled { background: #fecaca; color: #7f1d1d; border: 1px solid #fca5a5; }
 
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
 
-    #zoomWrapper { transform-origin: top left; }
+    /* 右ペイン */
+    #pageWrap { display: flex; flex: 1; overflow: hidden; }
+    #mainPane { flex: 1; overflow: auto; }
+    #detailPane {
+      width: 0; overflow: hidden; transition: width 0.25s ease;
+      border-left: 1px solid #e5e7eb; background: #fff;
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    #detailPane.open { width: 360px; }
+    #detailInner { padding: 16px; overflow-y: auto; flex: 1; font-size: 13px; }
+    #detailInner h3 { font-size: 15px; font-weight: 800; margin-bottom: 12px; color: #1e3a5f; }
+    .detail-row { margin-bottom: 8px; line-height: 1.6; }
+    .detail-label { font-size: 11px; font-weight: 700; color: #6b7280; }
+    .detail-val { color: #111827; }
+    #detailMemo {
+      margin-top: 12px; padding: 10px; background: #f9fafb;
+      border: 1px solid #e5e7eb; border-radius: 8px;
+      font-size: 12px; white-space: pre-wrap; line-height: 1.7;
+      color: #374151; max-height: 200px; overflow-y: auto;
+    }
+    #detailClose {
+      padding: 8px 16px; border-bottom: 1px solid #e5e7eb;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; flex-shrink: 0;
+    }
+    .close-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 18px; color: #6b7280; line-height: 1; flex-shrink: 0;
+    }
+    .close-btn:hover { color: #111; }
+    .detail-actions {
+      display: flex; gap: 6px; flex: 1;
+    }
+    .detail-actions a, .detail-actions button {
+      flex: 1; padding: 6px 4px; border-radius: 8px;
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      text-align: center; text-decoration: none;
+      border: 1px solid #e5e7eb;
+    }
+    .btn-edit { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe !important; }
+    .btn-edit:hover { background: #dbeafe; }
+    .btn-delete { background: #fff; color: #dc2626; border-color: #fca5a5 !important; }
+    .btn-delete:hover { background: #fee2e2; }
+
+    /* ソート中バッジ */
+    #sortBadge {
+      display: none;
+      background: #3b82f6; color: #fff;
+      font-size: 11px; font-weight: 700;
+      padding: 3px 10px; border-radius: 20px;
+      margin-left: 8px; cursor: pointer;
+    }
+    #sortBadge:hover { background: #2563eb; }
   </style>
 </head>
 <body>
 
   <div id="navBar">
     <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
-    <span style="font-size:13px;font-weight:700;margin-left:12px;">📦 発送確認カレンダー</span>
+    <button class="nav-btn" onclick="location.href='/shipping-calendar.html'">📦 発送確認</button>
+    <span style="font-size:13px;font-weight:700;">👤 通訳カレンダー</span>
     <div style="flex:1;"></div>
-    <button class="nav-btn" id="prevMonthBtn">◀ 前へ</button>
-    <span id="rangeLabel" style="margin:0 8px;font-size:13px;font-weight:600;color:#374151;min-width:180px;text-align:center;"></span>
-    <button class="nav-btn" id="nextMonthBtn">次へ ▶</button>
+    <span id="sortBadge" onclick="clearSort()">📅 ソート中 ✕</span>
+    <button class="nav-btn" id="prevBtn">◀ 前へ</button>
+    <span id="rangeLabel"></span>
+    <button class="nav-btn" id="nextBtn">次へ ▶</button>
     <div id="zoomControls">
       <button id="zoomOutBtn">－</button>
       <span id="zoomLabel">100%</span>
       <button id="zoomInBtn">＋</button>
     </div>
-    <span id="errorText" style="margin-left:8px;"></span>
+    <span id="errorText"></span>
   </div>
 
-  <div id="mainLayout">
-    <div id="timelinePane">
+  <div id="pageWrap">
+    <div id="mainPane">
       <div id="zoomWrapper">
         <div id="loadingMsg">読み込み中...</div>
         <table id="calTable" style="display:none;">
@@ -167,10 +198,17 @@
         </table>
       </div>
     </div>
-    <div id="checklistPane">
-      <div id="checklistContent" style="display:none;"></div>
+    <div id="detailPane">
+      <div id="detailClose">
+        <div class="detail-actions">
+          <a id="btnEdit" class="btn-edit" href="#">✏️ 案件編集</a>
+          <button id="btnDelete" class="btn-delete" onclick="deleteProject()">🗑️ 案件削除</button>
+        </div>
+        <button class="close-btn" id="closeDetailBtn">✕</button>
+      </div>
+      <div id="detailInner"></div>
     </div>
-  </div>
+  </div><!-- /pageWrap -->
 
 <script>
 (() => {
@@ -179,26 +217,30 @@
   const TZ = 'Asia/Tokyo';
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
 
-  const prevMonthBtn     = document.getElementById('prevMonthBtn');
-  const nextMonthBtn     = document.getElementById('nextMonthBtn');
-  const rangeLabel       = document.getElementById('rangeLabel');
-  const calHead          = document.getElementById('calHead');
-  const calBody          = document.getElementById('calBody');
-  const calTable         = document.getElementById('calTable');
-  const loadingMsg       = document.getElementById('loadingMsg');
-  const errorText        = document.getElementById('errorText');
-  const checklistPane    = document.getElementById('checklistPane');
-  const checklistContent = document.getElementById('checklistContent');
-  const zoomWrapper      = document.getElementById('zoomWrapper');
-  const zoomLabel        = document.getElementById('zoomLabel');
-  const zoomInBtn        = document.getElementById('zoomInBtn');
-  const zoomOutBtn       = document.getElementById('zoomOutBtn');
-  const timelinePane     = document.getElementById('timelinePane');
+  // ★ 抽出するキーワードリスト
+  // 「キーワード：名前1、名前2」形式で複数名対応
+  // コロンは全角（：）・半角(:)両対応、「さん」は自動除去
+  const KEYWORDS = ['通訳'];
 
-  // 表示開始オフセット（◀▶で±30日移動）
+  const prevBtn    = document.getElementById('prevBtn');
+  const nextBtn    = document.getElementById('nextBtn');
+  const rangeLabel = document.getElementById('rangeLabel');
+  const calHead    = document.getElementById('calHead');
+  const calBody    = document.getElementById('calBody');
+  const calTable   = document.getElementById('calTable');
+  const loadingMsg = document.getElementById('loadingMsg');
+  const errorText  = document.getElementById('errorText');
+  const zoomWrapper = document.getElementById('zoomWrapper');
+  const zoomLabel  = document.getElementById('zoomLabel');
+  const zoomInBtn  = document.getElementById('zoomInBtn');
+  const zoomOutBtn = document.getElementById('zoomOutBtn');
+  const mainPane   = document.getElementById('mainPane');
+  const sortBadge  = document.getElementById('sortBadge');
+
   let offsetDays = 0;
+  let sortByDate = null; // ソート対象の日付文字列
 
-  // ズーム設定（30%〜100%）
+  // ズーム
   const ZOOM_STEPS = [30, 40, 50, 60, 70, 80, 90, 100];
   let zoomIdx = ZOOM_STEPS.indexOf(100);
 
@@ -210,13 +252,8 @@
     zoomWrapper.style.height = `${100 / scale}%`;
     zoomLabel.textContent = `${pct}%`;
   }
-
-  zoomInBtn.addEventListener('click', () => {
-    if (zoomIdx < ZOOM_STEPS.length - 1) { zoomIdx++; applyZoom(); }
-  });
-  zoomOutBtn.addEventListener('click', () => {
-    if (zoomIdx > 0) { zoomIdx--; applyZoom(); }
-  });
+  zoomInBtn.addEventListener('click', () => { if (zoomIdx < ZOOM_STEPS.length-1) { zoomIdx++; applyZoom(); } });
+  zoomOutBtn.addEventListener('click', () => { if (zoomIdx > 0) { zoomIdx--; applyZoom(); } });
 
   function pad2(n) { return String(n).padStart(2,'0'); }
 
@@ -228,26 +265,6 @@
 
   function todayJst() { return toJstDateStr(new Date().toISOString()); }
 
-  // 当日+offsetDaysから62日間（約2ヶ月）の日付配列を生成
-  function getDaysInRange() {
-    const days = [];
-    const start = addDays(todayJst(), offsetDays);
-    for (let i = 0; i < 62; i++) days.push(addDays(start, i));
-    return days;
-  }
-
-  function updateRangeLabel(days) {
-    if (!days.length) return;
-    const s = days[0].split('-').map(Number);
-    const e = days[days.length-1].split('-').map(Number);
-    rangeLabel.textContent = `${s[0]}/${String(s[1]).padStart(2,'0')}/${String(s[2]).padStart(2,'0')} 〜 ${e[0]}/${String(e[1]).padStart(2,'0')}/${String(e[2]).padStart(2,'0')}`;
-  }
-
-  function getWeekday(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(Date.UTC(y, m-1, d)).getUTCDay();
-  }
-
   function addDays(dateStr, n) {
     const [y, m, d] = dateStr.split('-').map(Number);
     const dt = new Date(Date.UTC(y, m-1, d));
@@ -255,9 +272,63 @@
     return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth()+1)}-${pad2(dt.getUTCDate())}`;
   }
 
-  function compareDates(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+  function getWeekday(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m-1, d)).getUTCDay();
+  }
+
+  function getDaysInRange() {
+    const days = [];
+    const start = addDays(todayJst(), offsetDays - 7);
+    for (let i = 0; i < 69; i++) days.push(addDays(start, i));
+    return days;
+  }
+
+  function updateRangeLabel(days) {
+    if (!days.length) return;
+    const s = days[0].split('-').map(Number);
+    const e = days[days.length-1].split('-').map(Number);
+    rangeLabel.textContent = `${s[0]}/${pad2(s[1])}/${pad2(s[2])} 〜 ${e[0]}/${pad2(e[1])}/${pad2(e[2])}`;
+  }
+
+  // メモからスタッフ名を抽出
+  // 「通訳：名前1、名前2さん」→ ['名前1', '名前2']
+  // コロンは全角（：）・半角(:)両対応
+  // 区切りは「、」「,」「，」スペース対応
+  // 「さん」は除去
+  function extractNames(memo) {
+    if (!memo) return [];
+    const names = new Set();
+
+    for (const kw of KEYWORDS) {
+      // キーワード + 全角/半角コロン + 以降の文字（改行まで）
+      const re = new RegExp(kw + '[：:]([^\n\r]+)', 'g');
+      let m;
+      while ((m = re.exec(memo)) !== null) {
+        // 「、」「,」「，」「　」「 」で分割
+        const parts = m[1].split(/[、,，　\s]+/);
+        for (const part of parts) {
+          // 「さん」を除去、前後の空白・記号を除去
+          const name = part
+            .replace(/さん$/g, '')
+            .replace(/[　\s]/g, '')
+            .trim();
+          if (name.length > 0) names.add(name);
+        }
+      }
+    }
+
+    return [...names];
+  }
+
+  function getTimeStr(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, hour:'2-digit', minute:'2-digit', hour12: false }).format(d);
+  }
 
   function lightenColor(hex, amount) {
+    if (!hex || !hex.startsWith('#')) return null;
     const num = parseInt(hex.replace('#', ''), 16);
     const r = Math.min(255, (num >> 16) + amount);
     const g = Math.min(255, ((num >> 8) & 0xff) + amount);
@@ -265,15 +336,9 @@
     return `rgb(${r},${g},${b})`;
   }
 
-  function applyColor(block, color, isLight) {
-    if (!color) return;
-    const bg = isLight ? lightenColor(color, 80) : lightenColor(color, 60);
-    block.style.cssText += `background:${bg} !important; border:2px solid ${color} !important; color:#333 !important; text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;`;
-  }
-
   async function fetchProjects() {
     const token = localStorage.getItem('token') || '';
-    const res = await fetch('/api/projects/shipping', {
+    const res = await fetch('/api/projects/interpreter', {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
     });
     const json = await res.json();
@@ -281,146 +346,128 @@
     return Array.isArray(json) ? json : json.projects || [];
   }
 
-  const FIXED_ITEMS = [
-    '表示板セット', '養生テープ', 'ガムテープ（黒）', 'キャプタイヤ',
-    '電源タップ', 'アッテネーター（20db/40db）', '変換プラグ（オス-オス/メス-メス）',
-  ];
-
-  async function fetchChecklist(projectId) {
-    const token = localStorage.getItem('token') || '';
-    const res = await fetch(`/api/project-items/detail?project_id=${projectId}`, {
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
-    });
-    const dbItems = res.ok ? (await res.json()).items || [] : [];
-    const fixedItems = FIXED_ITEMS.map(name => ({
-      id: null, name, equipment_name: name, quantity: null,
-      checked: false, fixed: true, image_url: null,
-    }));
-    return [...dbItems, ...fixedItems];
-  }
-
-  async function toggleCheckItem(projectId, itemId, checked) {
-    const token = localStorage.getItem('token') || '';
-    await fetch(`/api/project-items/${itemId}/check`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ checked })
-    });
-  }
-
   function buildTable(projects, days) {
     const today  = todayJst();
     const daySet = new Set(days);
-    const dayIdx = Object.fromEntries(days.map((d, i) => [d, i]));
 
+    // 名前→案件マッピングを構築
+    // staffMap: { 名前: [ {project, dateStr} ] }
+    const staffMap = {};
+
+    for (const p of projects) {
+      const names = extractNames(p.memo);
+      if (!names.length) continue;
+
+      const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
+      const eventEnd   = toJstDateStr(p.usage_end_at   || p.usage_end);
+      if (!eventStart || !eventEnd) continue;
+
+      // この案件が表示期間内にあるか
+      const rangeEnd = days[days.length-1];
+      const rangeStart = days[0];
+      if (eventStart > rangeEnd || eventEnd < rangeStart) continue;
+
+      for (const name of names) {
+        if (!staffMap[name]) staffMap[name] = [];
+        staffMap[name].push(p);
+      }
+    }
+
+    let staffList = Object.keys(staffMap).sort();
+
+    // ソート：指定日に予定がある人を上に
+    if (sortByDate) {
+      staffList = staffList.sort((a, b) => {
+        const aHas = staffMap[a].some(p => {
+          const s = toJstDateStr(p.usage_start_at || p.usage_start);
+          const e = toJstDateStr(p.usage_end_at   || p.usage_end);
+          return s <= sortByDate && e >= sortByDate;
+        });
+        const bHas = staffMap[b].some(p => {
+          const s = toJstDateStr(p.usage_start_at || p.usage_start);
+          const e = toJstDateStr(p.usage_end_at   || p.usage_end);
+          return s <= sortByDate && e >= sortByDate;
+        });
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        return a.localeCompare(b, 'ja');
+      });
+    }
+
+    // ヘッダー
     calHead.innerHTML = '';
     const trH = document.createElement('tr');
-    const thP = document.createElement('th');
-    thP.className = 'th-project';
-    thP.textContent = '案件';
-    trH.appendChild(thP);
+    const thS = document.createElement('th');
+    thS.className = 'th-staff';
+    thS.textContent = 'スタッフ';
+    trH.appendChild(thS);
+
     for (const day of days) {
       const th = document.createElement('th');
       const w = getWeekday(day);
-      const d = Number(day.split('-')[2]);
-      th.textContent = `${d}\n${WEEKDAYS[w]}`;
-      th.style.whiteSpace = 'pre';
+      const [, dm, dd] = day.split('-').map(Number);
+      th.innerHTML = `${dm}/${dd}<br><span style="font-weight:400;">${WEEKDAYS[w]}</span>`;
       if (w === 6) th.classList.add('is-sat');
       if (w === 0) th.classList.add('is-sun');
       if (day === today) th.classList.add('is-today');
+      if (day === sortByDate) th.classList.add('sorted');
+      th.classList.add('sortable');
+      th.title = `${day} をクリックでこの日に予定がある人を上に表示`;
+
+      // ソートインジケーター
+      if (day === sortByDate) {
+        const ind = document.createElement('span');
+        ind.className = 'sort-indicator';
+        ind.textContent = '▲';
+        th.appendChild(ind);
+      }
+
+      th.addEventListener('click', () => {
+        if (sortByDate === day) {
+          clearSort();
+        } else {
+          sortByDate = day;
+          sortBadge.style.display = 'inline-block';
+          sortBadge.textContent = `📅 ${day} でソート中 ✕`;
+          render();
+        }
+      });
       trH.appendChild(th);
     }
     calHead.appendChild(trH);
 
     calBody.innerHTML = '';
 
-    const visibleProjects = projects.filter(p => {
-      const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
-      const eventEnd   = toJstDateStr(p.usage_end_at   || p.usage_end);
-      const shipDate   = p.shipping_date   ? p.shipping_date.slice(0,10)   : null;
-      const retDate    = p.return_due_date ? p.return_due_date.slice(0,10) : null;
-      const rangeStart = shipDate  || eventStart;
-      const rangeEnd   = retDate   || eventEnd;
-      if (!rangeStart || !rangeEnd) return false;
-      // ★ 当月と重なるもののみ表示
-      return compareDates(rangeStart, days[days.length-1]) <= 0 &&
-             compareDates(rangeEnd,   days[0]) >= 0;
-    });
-
-    // 発送日が早い順にソート
-    visibleProjects.sort((a, b) => {
-      const as = a.shipping_date ? a.shipping_date.slice(0,10) : (toJstDateStr(a.usage_start_at || a.usage_start) || '9999');
-      const bs = b.shipping_date ? b.shipping_date.slice(0,10) : (toJstDateStr(b.usage_start_at || b.usage_start) || '9999');
-      return as < bs ? -1 : as > bs ? 1 : 0;
-    });
-
-    if (!visibleProjects.length) {
+    if (!staffList.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = days.length + 1;
-      td.textContent = 'この期間に案件はありません';
-      td.style.cssText = 'text-align:center;padding:24px;color:#9ca3af;font-size:13px;';
+      td.textContent = 'メモに該当するスタッフ情報がありません';
+      td.style.cssText = 'text-align:center;padding:40px;color:#9ca3af;font-size:13px;';
       tr.appendChild(td);
       calBody.appendChild(tr);
       return;
     }
 
-    for (const p of visibleProjects) {
-      const status     = p.status || 'draft';
-      const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
-      const eventEnd   = toJstDateStr(p.usage_end_at   || p.usage_end);
-      const shipDate   = p.shipping_date   ? p.shipping_date.slice(0,10)   : null;
-      const retDate    = p.return_due_date ? p.return_due_date.slice(0,10) : null;
-
-      let startTime = '', endTime = '';
-      if (p.usage_start_at || p.usage_start) {
-        const d = new Date(p.usage_start_at || p.usage_start);
-        startTime = new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, hour:'2-digit', minute:'2-digit', hour12: false }).format(d);
-      }
-      if (p.usage_end_at || p.usage_end) {
-        const d = new Date(p.usage_end_at || p.usage_end);
-        endTime = new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, hour:'2-digit', minute:'2-digit', hour12: false }).format(d);
-      }
-
+    for (const name of staffList) {
+      const myProjects = staffMap[name];
       const row = document.createElement('tr');
-      const tdP = document.createElement('td');
-      tdP.className = 'td-project';
-      tdP.textContent = p.title || '(無題)';
-      tdP.title = p.title || '';
-      tdP.addEventListener('click', () => openChecklist(p));
-      row.appendChild(tdP);
 
-      // ★ 月をまたぐ場合の当月内有効開始日を計算
-      function effectiveStart(dateStr) {
-        if (!dateStr) return null;
-        return compareDates(dateStr, days[0]) >= 0 ? dateStr : days[0];
-      }
+      // この行にソート日の予定があるか
+      const hasSortDay = sortByDate && myProjects.some(p => {
+        const s = toJstDateStr(p.usage_start_at || p.usage_start);
+        const e = toJstDateStr(p.usage_end_at   || p.usage_end);
+        return s <= sortByDate && e >= sortByDate;
+      });
+      if (hasSortDay) row.classList.add('has-sort');
 
-      const effShipStart  = shipDate  ? effectiveStart(shipDate)  : null;
-      const effEventStart = eventStart ? effectiveStart(eventStart) : null;
-      const retStartDay   = eventEnd   ? addDays(eventEnd, 1)       : null;
-      const effRetStart   = retStartDay ? effectiveStart(retStartDay) : null;
-
-      // スキップセット
-      const skipSet = new Set();
-
-      function makeBlock(cls, text, title, isLight, onclick) {
-        const block = document.createElement('div');
-        block.className = `block ${status} ${cls}`;
-        applyColor(block, p.color, isLight);
-        block.textContent = text;
-        block.title = title;
-        block.addEventListener('mouseup', ev => {
-          if (ev.button !== 0) return;
-          if (dragMoved) return;
-          onclick();
-        });
-        return block;
-      }
+      const tdS = document.createElement('td');
+      tdS.className = 'td-staff';
+      tdS.textContent = name;
+      tdS.title = name;
+      row.appendChild(tdS);
 
       for (const day of days) {
-        if (skipSet.has(day)) continue;
-
         const td = document.createElement('td');
         td.className = 'td-day';
         const w = getWeekday(day);
@@ -428,59 +475,56 @@
         if (w === 0) td.classList.add('is-sun');
         if (day === today) td.classList.add('is-today');
 
-        // 発送ブロック（当月内 shipDate〜eventStart前日）
-        if (effShipStart && day === effShipStart && eventStart && compareDates(effShipStart, eventStart) < 0) {
-          let span = 0, d = day;
-          while (compareDates(d, eventStart) < 0 && daySet.has(d)) {
-            span++; skipSet.add(d); d = addDays(d, 1);
-          }
-          if (span > 0) {
-            td.colSpan = span;
-            const block = document.createElement('div');
-            block.className = `block light`;
-            block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
-            block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
-            block.title = `発送〜本番: ${p.title}`;
-            block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
-            td.appendChild(block);
-            row.appendChild(td);
-            continue;
-          }
-        }
+        // この日にある案件を探す
+        const dayProjects = myProjects.filter(p => {
+          const s = toJstDateStr(p.usage_start_at || p.usage_start);
+          const e = toJstDateStr(p.usage_end_at   || p.usage_end);
+          return s && e && s <= day && e >= day;
+        });
 
-        // 本番ブロック（当月内 eventStart〜eventEnd）
-        if (effEventStart && day === effEventStart && eventEnd) {
-          let span = 0, d = day;
-          while (compareDates(d, eventEnd) <= 0 && daySet.has(d)) {
-            span++; skipSet.add(d); d = addDays(d, 1);
+        for (const p of dayProjects) {
+          const block = document.createElement('div');
+          block.className = `ev-block ${p.status || 'draft'}`;
+
+          // カスタムカラー適用
+          if (p.color) {
+            const bg = lightenColor(p.color, 70);
+            if (bg) {
+              block.style.background = bg;
+              block.style.borderColor = p.color;
+              block.style.color = '#333';
+            }
           }
-          span = Math.max(1, span);
-          td.colSpan = span;
-          const label = `🎬 ${p.title || ''} ${startTime}〜${endTime}`;
-          const block = makeBlock('event-day', label, `本番日: ${p.title}`, false, () => openChecklist(p));
+
+          const startTime = getTimeStr(p.usage_start_at || p.usage_start);
+          const endTime   = getTimeStr(p.usage_end_at   || p.usage_end);
+          const timeStr   = p.is_all_day ? '終日' : `${startTime}〜${endTime}`;
+
+          block.innerHTML = `
+            <div class="ev-title">${p.title || '(無題)'}</div>
+            <div class="ev-time">${timeStr}</div>
+          `;
+          block.title = `${p.title || ''} ${timeStr}`;
+
+          // 長押し判定
+          let pressTimer = null;
+          let isLongPress = false;
+
+          block.addEventListener('mousedown', ev => {
+            if (ev.button !== 0) return;
+            isLongPress = false;
+            pressTimer = setTimeout(() => { isLongPress = true; }, 400);
+          });
+          block.addEventListener('mouseup', ev => {
+            clearTimeout(pressTimer);
+            if (ev.button !== 0) return;
+            if (!isLongPress && !dragMoved) {
+              openDetail(p);
+            }
+          });
+          block.addEventListener('mouseleave', () => clearTimeout(pressTimer));
+
           td.appendChild(block);
-          row.appendChild(td);
-          continue;
-        }
-
-        // 返却ブロック（当月内 retStartDay〜retDate）
-        if (effRetStart && day === effRetStart && retDate) {
-          let span = 0, d = day;
-          while (compareDates(d, retDate) <= 0 && daySet.has(d)) {
-            span++; skipSet.add(d); d = addDays(d, 1);
-          }
-          if (span > 0) {
-            td.colSpan = span;
-            const block = document.createElement('div');
-            block.className = `block light`;
-            block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
-            block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
-            block.title = `返却期間: ${p.title}`;
-            block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
-            td.appendChild(block);
-            row.appendChild(td);
-            continue;
-          }
         }
 
         row.appendChild(td);
@@ -488,109 +532,20 @@
 
       calBody.appendChild(row);
     }
-  }
 
-  async function openChecklist(project) {
-    checklistPane.classList.add('open');
-    checklistContent.style.display = 'block';
-    checklistContent.innerHTML = `<h2>${project.title || '(無題)'}</h2><div class="meta">読み込み中...</div>`;
-    try {
-      const items  = await fetchChecklist(project.id);
-      const status = { draft: '仮', confirmed: '確定', cancelled: 'キャンセル' }[project.status] || '';
-
-      let html = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <h2 style="margin:0;font-size:14px;">${project.title || '(無題)'}</h2>
-          <button id="closeChecklistBtn" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280;padding:0 4px;">✕</button>
-        </div>
-        <div class="meta" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <span>${status}</span>
-          <button onclick="location.href='/project-edit.html?id=${project.id}'"
-            style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
-            編集ページへ →
-          </button>
-        </div>
-      `;
-
-      const dbItems    = items.filter(i => !i.fixed);
-      const fixedItems = items.filter(i => i.fixed);
-
-      if (!items.length) {
-        html += `<div style="color:#9ca3af;font-size:13px;margin-top:16px;">チェックリストアイテムがありません</div>`;
-      } else {
-        if (dbItems.length) {
-          html += `<div style="font-size:11px;font-weight:700;color:#6b7280;padding:6px 0 4px;border-bottom:1px solid #e5e7eb;margin-bottom:4px;">📦 案件機材</div>`;
-          for (const item of dbItems) {
-            const checked   = item.checked ? 'checked' : '';
-            const nameClass = item.checked ? 'item-name checked' : 'item-name';
-            const img = item.image_url ? `<img src="${item.image_url}" alt="">` : '';
-            const qty = item.quantity ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${item.quantity}個</span>` : '';
-            html += `
-              <div class="cl-item">
-                <input type="checkbox" ${checked} data-item-id="${item.id}" data-project-id="${project.id}" />
-                ${img}
-                <span class="${nameClass}">${item.name || item.equipment_name || ''}</span>
-                ${qty}
-              </div>`;
-          }
-        }
-        if (fixedItems.length) {
-          html += `<div style="font-size:11px;font-weight:700;color:#6b7280;padding:6px 0 4px;border-bottom:1px solid #e5e7eb;margin-bottom:4px;margin-top:8px;">🔧 固定備品</div>`;
-          for (const item of fixedItems) {
-            html += `
-              <div class="cl-item">
-                <span style="width:16px;height:16px;display:inline-block;border:2px solid #d1d5db;border-radius:4px;flex-shrink:0;"></span>
-                <span class="item-name">${item.equipment_name}</span>
-                <span style="font-size:11px;color:#9ca3af;white-space:nowrap;">固定備品</span>
-              </div>`;
-          }
-        }
-      }
-
-      html += `
-        <div style="display:flex;justify-content:flex-end;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;">
-          <button id="deleteProjectBtn"
-            style="padding:6px 16px;background:#fff;color:#ef4444;border:2px solid #ef4444;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
-            🗑️ 案件削除
-          </button>
-        </div>
-      `;
-      checklistContent.innerHTML = html;
-
-      document.getElementById('closeChecklistBtn').addEventListener('click', () => {
-        checklistPane.classList.remove('open');
-        checklistContent.style.display = 'none';
-      });
-
-      document.getElementById('deleteProjectBtn').addEventListener('click', () => deleteProject(project.id));
-
-      checklistContent.querySelectorAll('input[type=checkbox]').forEach(cb => {
-        cb.addEventListener('change', async () => {
-          const span = cb.parentElement.querySelector('.item-name');
-          cb.checked ? span.classList.add('checked') : span.classList.remove('checked');
-          await toggleCheckItem(cb.dataset.projectId, cb.dataset.itemId, cb.checked);
-        });
-      });
-    } catch (e) {
-      checklistContent.innerHTML = `<div style="color:#b91c1c;">チェックリストの取得に失敗しました</div>`;
+    // 当日列へスクロール
+    if (offsetDays === 0) {
+      setTimeout(() => {
+        const todayTh = document.querySelector('#calHead th.is-today');
+        if (todayTh) mainPane.scrollLeft = todayTh.offsetLeft - 120;
+      }, 50);
     }
   }
 
-  async function deleteProject(projectId) {
-    if (!confirm('この案件を発送確認カレンダーから非表示にしますか？\n（他のカレンダーには影響しません）')) return;
-    try {
-      const token = localStorage.getItem('token') || '';
-      const res = await fetch(`/api/projects/${projectId}/hide-shipping`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('削除失敗');
-      checklistPane.classList.remove('open');
-      checklistContent.style.display = 'none';
-      await render();
-    } catch (e) {
-      alert('削除に失敗しました: ' + e.message);
-    }
+  function clearSort() {
+    sortByDate = null;
+    sortBadge.style.display = 'none';
+    render();
   }
 
   async function render() {
@@ -615,34 +570,87 @@
   let dragStartX = 0, dragStartY = 0;
   let dragScrollLeft = 0, dragScrollTop = 0;
   let dragMoved = false;
-  timelinePane.style.userSelect = 'none';
-  timelinePane.addEventListener('mousedown', ev => {
+  mainPane.style.userSelect = 'none';
+  mainPane.addEventListener('mousedown', ev => {
     if (ev.button !== 0) return;
     isDragging = true;
     dragMoved = false;
     dragStartX = ev.clientX;
     dragStartY = ev.clientY;
-    dragScrollLeft = timelinePane.scrollLeft;
-    dragScrollTop  = timelinePane.scrollTop;
-    timelinePane.style.cursor = 'grabbing';
+    dragScrollLeft = mainPane.scrollLeft;
+    dragScrollTop  = mainPane.scrollTop;
+    mainPane.style.cursor = 'grabbing';
   });
   document.addEventListener('mousemove', ev => {
     if (!isDragging) return;
     const dx = ev.clientX - dragStartX;
     const dy = ev.clientY - dragStartY;
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
-    timelinePane.scrollLeft = dragScrollLeft - dx;
-    timelinePane.scrollTop  = dragScrollTop  - dy;
+    mainPane.scrollLeft = dragScrollLeft - dx;
+    mainPane.scrollTop  = dragScrollTop  - dy;
   });
   document.addEventListener('mouseup', () => {
     isDragging = false;
-    timelinePane.style.cursor = '';
+    mainPane.style.cursor = '';
     setTimeout(() => { dragMoved = false; }, 0);
   });
 
-  // ◀▶ボタンで表示期間を±30日移動
-  prevMonthBtn.addEventListener('click', () => { offsetDays -= 30; render(); });
-  nextMonthBtn.addEventListener('click', () => { offsetDays += 30; render(); });
+  let currentProjectId = null;
+
+  function openDetail(p) {
+    currentProjectId = p.id;
+    const pane = document.getElementById('detailPane');
+    const inner = document.getElementById('detailInner');
+    const btnEdit = document.getElementById('btnEdit');
+
+    const startTime = getTimeStr(p.usage_start_at || p.usage_start);
+    const endTime   = getTimeStr(p.usage_end_at   || p.usage_end);
+    const timeStr   = p.is_all_day ? '終日' : `${startTime}〜${endTime}`;
+    const startDate = toJstDateStr(p.usage_start_at || p.usage_start) || '';
+    const endDate   = toJstDateStr(p.usage_end_at   || p.usage_end)   || '';
+
+    const statusMap = { draft:'未確定', confirmed:'確定', cancelled:'キャンセル' };
+
+    inner.innerHTML = `
+      <h3>${p.title || '(無題)'}</h3>
+      <div class="detail-row"><span class="detail-label">ステータス</span><br><span class="detail-val">${statusMap[p.status] || p.status || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">クライアント</span><br><span class="detail-val">${p.client_name || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">会場</span><br><span class="detail-val">${p.venue || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">担当者</span><br><span class="detail-val">${p.person_in_charge || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">使用期間</span><br><span class="detail-val">${startDate} 〜 ${endDate}</span></div>
+      <div class="detail-row"><span class="detail-label">時間</span><br><span class="detail-val">${timeStr}</span></div>
+      ${p.memo ? `<div class="detail-label" style="margin-top:12px;">📝 メモ</div><div id="detailMemo">${p.memo}</div>` : ''}
+    `;
+
+    btnEdit.href = `/project-edit.html?id=${p.id}&return=${encodeURIComponent(location.pathname)}`;
+    pane.classList.add('open');
+  }
+
+  function closeDetail() {
+    document.getElementById('detailPane').classList.remove('open');
+    currentProjectId = null;
+  }
+
+  async function deleteProject() {
+    if (!currentProjectId) return;
+    if (!confirm('この案件を通訳カレンダーから非表示にしますか？\n（他のカレンダーには影響しません）')) return;
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(`/api/projects/${currentProjectId}/hide-interpreter`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      closeDetail();
+      render();
+    } else {
+      alert('削除に失敗しました');
+    }
+  }
+
+  document.getElementById('closeDetailBtn').addEventListener('click', closeDetail);
+
+  prevBtn.addEventListener('click', () => { offsetDays -= 30; render(); });
+  nextBtn.addEventListener('click', () => { offsetDays += 30; render(); });
 
   applyZoom();
   render();
