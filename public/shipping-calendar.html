@@ -39,26 +39,51 @@
     }
     #errorText { color: #b91c1c; font-size: 12px; }
 
+    #zoomControls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 12px;
+    }
+    #zoomControls button {
+      padding: 2px 8px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    #zoomControls button:hover { background: #f3f4f6; }
+    #zoomLabel { font-size: 12px; color: #6b7280; min-width: 36px; text-align: center; }
+
     #mainLayout { display: flex; flex: 1; overflow: hidden; }
 
     #timelinePane { flex: 1; overflow: auto; border-right: 2px solid #e5e7eb; }
 
     #checklistPane {
-      width: 360px;
+      width: 0;
       flex-shrink: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       background: #fff;
+      padding: 0;
+      transition: width 0.2s ease, padding 0.2s ease;
+    }
+    #checklistPane.open {
+      width: 360px;
       padding: 16px;
+      border-left: 2px solid #e5e7eb;
     }
     #checklistPane h2 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #1e40af; }
     #checklistPane .meta { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
-    #checklistEmpty { color: #9ca3af; font-size: 13px; text-align: center; margin-top: 40px; }
 
     .cl-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
-    .cl-item input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+    .cl-item input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
     .cl-item .item-name { flex: 1; font-size: 13px; }
     .cl-item .item-name.checked { text-decoration: line-through; color: #9ca3af; }
-    .cl-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
+    .cl-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; flex-shrink: 0; }
 
     #calTable { border-collapse: collapse; white-space: nowrap; }
 
@@ -99,21 +124,20 @@
     }
     .block:hover { filter: brightness(0.92); }
 
-    /* ステータス別色（p.colorがない場合） */
     .block.draft        { background: #93c5fd; color: #1e3a5f; }
     .block.confirmed    { background: #86efac; color: #14532d; }
     .block.cancelled    { background: #fca5a5; color: #7f1d1d; }
 
-    /* 発送・返却期間は薄い色 */
     .block.draft.light        { background: #dbeafe; color: #1e3a5f; }
     .block.confirmed.light    { background: #dcfce7; color: #14532d; }
     .block.cancelled.light    { background: #fee2e2; color: #7f1d1d; }
 
-    /* 丸み */
     .block.event-day { border-radius: 6px; font-size: 11px; }
     .block.light     { border-radius: 6px; }
 
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
+
+    #zoomWrapper { transform-origin: top left; }
   </style>
 </head>
 <body>
@@ -125,19 +149,25 @@
     <button class="nav-btn" id="prevMonthBtn">◀</button>
     <input type="month" id="monthPicker" style="margin:0 6px;" />
     <button class="nav-btn" id="nextMonthBtn">▶</button>
+    <div id="zoomControls">
+      <button id="zoomOutBtn">－</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomInBtn">＋</button>
+    </div>
     <span id="errorText" style="margin-left:8px;"></span>
   </div>
 
   <div id="mainLayout">
     <div id="timelinePane">
-      <div id="loadingMsg">読み込み中...</div>
-      <table id="calTable" style="display:none;">
-        <thead id="calHead"></thead>
-        <tbody id="calBody"></tbody>
-      </table>
+      <div id="zoomWrapper">
+        <div id="loadingMsg">読み込み中...</div>
+        <table id="calTable" style="display:none;">
+          <thead id="calHead"></thead>
+          <tbody id="calBody"></tbody>
+        </table>
+      </div>
     </div>
     <div id="checklistPane">
-      <div id="checklistEmpty">← 案件をクリックすると<br>チェックリストが表示されます</div>
       <div id="checklistContent" style="display:none;"></div>
     </div>
   </div>
@@ -149,21 +179,46 @@
   const TZ = 'Asia/Tokyo';
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
 
-  const monthPicker    = document.getElementById('monthPicker');
-  const prevMonthBtn   = document.getElementById('prevMonthBtn');
-  const nextMonthBtn   = document.getElementById('nextMonthBtn');
-  const calHead        = document.getElementById('calHead');
-  const calBody        = document.getElementById('calBody');
-  const calTable       = document.getElementById('calTable');
-  const loadingMsg     = document.getElementById('loadingMsg');
-  const errorText      = document.getElementById('errorText');
-  const checklistEmpty   = document.getElementById('checklistEmpty');
+  const monthPicker      = document.getElementById('monthPicker');
+  const prevMonthBtn     = document.getElementById('prevMonthBtn');
+  const nextMonthBtn     = document.getElementById('nextMonthBtn');
+  const calHead          = document.getElementById('calHead');
+  const calBody          = document.getElementById('calBody');
+  const calTable         = document.getElementById('calTable');
+  const loadingMsg       = document.getElementById('loadingMsg');
+  const errorText        = document.getElementById('errorText');
+  const checklistPane    = document.getElementById('checklistPane');
   const checklistContent = document.getElementById('checklistContent');
+  const zoomWrapper      = document.getElementById('zoomWrapper');
+  const zoomLabel        = document.getElementById('zoomLabel');
+  const zoomInBtn        = document.getElementById('zoomInBtn');
+  const zoomOutBtn       = document.getElementById('zoomOutBtn');
+  const timelinePane     = document.getElementById('timelinePane');
 
   const now = new Date();
   let currentYear  = now.getFullYear();
   let currentMonth = now.getMonth() + 1;
   monthPicker.value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+
+  // ズーム設定（30%〜100%）
+  const ZOOM_STEPS = [30, 40, 50, 60, 70, 80, 90, 100];
+  let zoomIdx = ZOOM_STEPS.indexOf(100);
+
+  function applyZoom() {
+    const pct = ZOOM_STEPS[zoomIdx];
+    const scale = pct / 100;
+    zoomWrapper.style.transform = `scale(${scale})`;
+    zoomWrapper.style.width = `${100 / scale}%`;
+    zoomWrapper.style.height = `${100 / scale}%`;
+    zoomLabel.textContent = `${pct}%`;
+  }
+
+  zoomInBtn.addEventListener('click', () => {
+    if (zoomIdx < ZOOM_STEPS.length - 1) { zoomIdx++; applyZoom(); }
+  });
+  zoomOutBtn.addEventListener('click', () => {
+    if (zoomIdx > 0) { zoomIdx--; applyZoom(); }
+  });
 
   function pad2(n) { return String(n).padStart(2,'0'); }
 
@@ -249,9 +304,9 @@
 
   function buildTable(projects, days) {
     const today  = todayJst();
+    const daySet = new Set(days);
     const dayIdx = Object.fromEntries(days.map((d, i) => [d, i]));
 
-    // ヘッダー
     calHead.innerHTML = '';
     const trH = document.createElement('tr');
     const thP = document.createElement('th');
@@ -276,11 +331,12 @@
     const visibleProjects = projects.filter(p => {
       const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
       const eventEnd   = toJstDateStr(p.usage_end_at   || p.usage_end);
-      const shipDate   = p.shipping_date     ? p.shipping_date.slice(0,10)     : null;
-      const retDate    = p.return_due_date   ? p.return_due_date.slice(0,10)   : null;
+      const shipDate   = p.shipping_date   ? p.shipping_date.slice(0,10)   : null;
+      const retDate    = p.return_due_date ? p.return_due_date.slice(0,10) : null;
       const rangeStart = shipDate  || eventStart;
       const rangeEnd   = retDate   || eventEnd;
       if (!rangeStart || !rangeEnd) return false;
+      // ★ 当月と重なるもののみ表示
       return compareDates(rangeStart, days[days.length-1]) <= 0 &&
              compareDates(rangeEnd,   days[0]) >= 0;
     });
@@ -313,12 +369,6 @@
         endTime = new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, hour:'2-digit', minute:'2-digit', hour12: false }).format(d);
       }
 
-      let eventMD = '';
-      if (eventStart) {
-        const [, em, ed] = eventStart.split('-');
-        eventMD = `${Number(em)}/${Number(ed)}`;
-      }
-
       const row = document.createElement('tr');
       const tdP = document.createElement('td');
       tdP.className = 'td-project';
@@ -327,52 +377,19 @@
       tdP.addEventListener('click', () => openChecklist(p));
       row.appendChild(tdP);
 
-      // 発送ブロックのspan数を事前計算
-      let shipSpanCount = 0;
-      if (shipDate && eventStart) {
-        let d = shipDate;
-        while (compareDates(d, eventStart) < 0) { shipSpanCount++; d = addDays(d, 1); }
+      // ★ 月をまたぐ場合の当月内有効開始日を計算
+      function effectiveStart(dateStr) {
+        if (!dateStr) return null;
+        return compareDates(dateStr, days[0]) >= 0 ? dateStr : days[0];
       }
 
-      // スキップすべき日付セットを作成
-      const skipDays = new Set();
-      if (shipDate && eventStart && shipSpanCount > 0) {
-        let d = addDays(shipDate, 1);
-        while (compareDates(d, eventStart) < 0) { skipDays.add(d); d = addDays(d, 1); }
-      }
-
-      // 本番期間のspan数を事前計算
-      let eventSpanCount = 0;
-      if (eventStart && eventEnd) {
-        let d = eventStart;
-        while (compareDates(d, eventEnd) <= 0 && dayIdx[d] !== undefined) {
-          eventSpanCount++;
-          d = addDays(d, 1);
-        }
-        eventSpanCount = Math.max(1, eventSpanCount);
-      }
-
-      // 返却期間のspan数
-      let retSpanCount = 0;
-      if (eventEnd && retDate) {
-        let d = addDays(eventEnd, 1);
-        while (compareDates(d, retDate) <= 0 && dayIdx[d] !== undefined) {
-          retSpanCount++;
-          d = addDays(d, 1);
-        }
-      }
+      const effShipStart  = shipDate  ? effectiveStart(shipDate)  : null;
+      const effEventStart = eventStart ? effectiveStart(eventStart) : null;
+      const retStartDay   = eventEnd   ? addDays(eventEnd, 1)       : null;
+      const effRetStart   = retStartDay ? effectiveStart(retStartDay) : null;
 
       // スキップセット
-      const skipDaysEvent = new Set();
-      if (eventStart && eventEnd && eventSpanCount > 1) {
-        let d = addDays(eventStart, 1);
-        while (compareDates(d, eventEnd) <= 0) { skipDaysEvent.add(d); d = addDays(d, 1); }
-      }
-      const skipDaysRet = new Set();
-      if (eventEnd && retDate && retSpanCount > 1) {
-        let d = addDays(addDays(eventEnd, 1), 1);
-        while (compareDates(d, retDate) <= 0) { skipDaysRet.add(d); d = addDays(d, 1); }
-      }
+      const skipSet = new Set();
 
       function makeBlock(cls, text, title, isLight, onclick) {
         const block = document.createElement('div');
@@ -389,7 +406,7 @@
       }
 
       for (const day of days) {
-        if (skipDays.has(day) || skipDaysEvent.has(day) || skipDaysRet.has(day)) continue;
+        if (skipSet.has(day)) continue;
 
         const td = document.createElement('td');
         td.className = 'td-day';
@@ -398,41 +415,59 @@
         if (w === 0) td.classList.add('is-sun');
         if (day === today) td.classList.add('is-today');
 
-        // 発送ブロック（colspan付き）
-        if (shipDate && day === shipDate && shipSpanCount > 0) {
-          td.colSpan = shipSpanCount;
-          const block = document.createElement('div');
-          block.className = `block light`;
-          block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
-          block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
-          block.title = `発送〜本番: ${p.title}`;
-          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
+        // 発送ブロック（当月内 shipDate〜eventStart前日）
+        if (effShipStart && day === effShipStart && eventStart && compareDates(effShipStart, eventStart) < 0) {
+          let span = 0, d = day;
+          while (compareDates(d, eventStart) < 0 && daySet.has(d)) {
+            span++; skipSet.add(d); d = addDays(d, 1);
+          }
+          if (span > 0) {
+            td.colSpan = span;
+            const block = document.createElement('div');
+            block.className = `block light`;
+            block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
+            block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
+            block.title = `発送〜本番: ${p.title}`;
+            block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
+            td.appendChild(block);
+            row.appendChild(td);
+            continue;
+          }
+        }
+
+        // 本番ブロック（当月内 eventStart〜eventEnd）
+        if (effEventStart && day === effEventStart && eventEnd) {
+          let span = 0, d = day;
+          while (compareDates(d, eventEnd) <= 0 && daySet.has(d)) {
+            span++; skipSet.add(d); d = addDays(d, 1);
+          }
+          span = Math.max(1, span);
+          td.colSpan = span;
+          const label = `🎬 ${p.title || ''} ${startTime}〜${endTime}`;
+          const block = makeBlock('event-day', label, `本番日: ${p.title}`, false, () => openChecklist(p));
           td.appendChild(block);
           row.appendChild(td);
           continue;
         }
 
-        // 本番ブロック（colspan付き）
-        if (eventStart && day === eventStart && eventSpanCount > 0) {
-          td.colSpan = eventSpanCount;
-          const block = makeBlock('event-day', `🎬 ${p.title || ''} ${startTime}〜${endTime}`, `本番日: ${p.title}`, false, () => openChecklist(p));
-          td.appendChild(block);
-          row.appendChild(td);
-          continue;
-        }
-
-        // 返却ブロック（colspan付き）
-        if (eventEnd && retDate && day === addDays(eventEnd, 1) && retSpanCount > 0) {
-          td.colSpan = retSpanCount;
-          const block = document.createElement('div');
-          block.className = `block light`;
-          block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
-          block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
-          block.title = `返却期間: ${p.title}`;
-          block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
-          td.appendChild(block);
-          row.appendChild(td);
-          continue;
+        // 返却ブロック（当月内 retStartDay〜retDate）
+        if (effRetStart && day === effRetStart && retDate) {
+          let span = 0, d = day;
+          while (compareDates(d, retDate) <= 0 && daySet.has(d)) {
+            span++; skipSet.add(d); d = addDays(d, 1);
+          }
+          if (span > 0) {
+            td.colSpan = span;
+            const block = document.createElement('div');
+            block.className = `block light`;
+            block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
+            block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
+            block.title = `返却期間: ${p.title}`;
+            block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
+            td.appendChild(block);
+            row.appendChild(td);
+            continue;
+          }
         }
 
         row.appendChild(td);
@@ -443,41 +478,62 @@
   }
 
   async function openChecklist(project) {
-    checklistEmpty.style.display = 'none';
+    checklistPane.classList.add('open');
     checklistContent.style.display = 'block';
     checklistContent.innerHTML = `<h2>${project.title || '(無題)'}</h2><div class="meta">読み込み中...</div>`;
     try {
       const items  = await fetchChecklist(project.id);
       const status = { draft: '仮', confirmed: '確定', cancelled: 'キャンセル' }[project.status] || '';
+
       let html = `
-        <h2>${project.title || '(無題)'}</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:14px;">${project.title || '(無題)'}</h2>
+          <button id="closeChecklistBtn" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280;padding:0 4px;">✕</button>
+        </div>
         <div class="meta" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
           <span>${status}</span>
           <button onclick="location.href='/project-edit.html?id=${project.id}'"
             style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
             編集ページへ →
           </button>
-          </div>
+        </div>
       `;
+
+      const dbItems    = items.filter(i => !i.fixed);
+      const fixedItems = items.filter(i => i.fixed);
+
       if (!items.length) {
         html += `<div style="color:#9ca3af;font-size:13px;margin-top:16px;">チェックリストアイテムがありません</div>`;
       } else {
-        for (const item of items) {
-          const checked   = item.checked ? 'checked' : '';
-          const nameClass = item.checked ? 'item-name checked' : 'item-name';
-          const img = item.image_url ? `<img src="${item.image_url}" alt="">` : '';
-          const qty = item.fixed
-            ? `<span style="font-size:11px;color:#9ca3af;white-space:nowrap;">固定備品</span>`
-            : item.quantity ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${item.quantity}個</span>` : '';
-          html += `
-            <div class="cl-item">
-              ${item.fixed ? '<span style="width:16px;height:16px;display:inline-block;border:2px solid #d1d5db;border-radius:4px;cursor:pointer;flex-shrink:0;"></span>' : `<input type="checkbox" ${checked} data-item-id="${item.id}" data-project-id="${project.id}" />`}
-              ${img}
-              <span class="${nameClass}">${item.name || item.equipment_name || ''}</span>
-              ${qty}
-            </div>`;
+        if (dbItems.length) {
+          html += `<div style="font-size:11px;font-weight:700;color:#6b7280;padding:6px 0 4px;border-bottom:1px solid #e5e7eb;margin-bottom:4px;">📦 案件機材</div>`;
+          for (const item of dbItems) {
+            const checked   = item.checked ? 'checked' : '';
+            const nameClass = item.checked ? 'item-name checked' : 'item-name';
+            const img = item.image_url ? `<img src="${item.image_url}" alt="">` : '';
+            const qty = item.quantity ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${item.quantity}個</span>` : '';
+            html += `
+              <div class="cl-item">
+                <input type="checkbox" ${checked} data-item-id="${item.id}" data-project-id="${project.id}" />
+                ${img}
+                <span class="${nameClass}">${item.name || item.equipment_name || ''}</span>
+                ${qty}
+              </div>`;
+          }
+        }
+        if (fixedItems.length) {
+          html += `<div style="font-size:11px;font-weight:700;color:#6b7280;padding:6px 0 4px;border-bottom:1px solid #e5e7eb;margin-bottom:4px;margin-top:8px;">🔧 固定備品</div>`;
+          for (const item of fixedItems) {
+            html += `
+              <div class="cl-item">
+                <span style="width:16px;height:16px;display:inline-block;border:2px solid #d1d5db;border-radius:4px;flex-shrink:0;"></span>
+                <span class="item-name">${item.equipment_name}</span>
+                <span style="font-size:11px;color:#9ca3af;white-space:nowrap;">固定備品</span>
+              </div>`;
+          }
         }
       }
+
       html += `
         <div style="display:flex;justify-content:flex-end;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;">
           <button id="deleteProjectBtn"
@@ -487,6 +543,11 @@
         </div>
       `;
       checklistContent.innerHTML = html;
+
+      document.getElementById('closeChecklistBtn').addEventListener('click', () => {
+        checklistPane.classList.remove('open');
+        checklistContent.style.display = 'none';
+      });
 
       document.getElementById('deleteProjectBtn').addEventListener('click', () => deleteProject(project.id));
 
@@ -511,7 +572,7 @@
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('削除失敗');
-      checklistEmpty.style.display = 'block';
+      checklistPane.classList.remove('open');
       checklistContent.style.display = 'none';
       await render();
     } catch (e) {
@@ -536,7 +597,6 @@
   }
 
   // ドラッグスクロール
-  const timelinePane = document.getElementById('timelinePane');
   let isDragging = false;
   let dragStartX = 0, dragStartY = 0;
   let dragScrollLeft = 0, dragScrollTop = 0;
@@ -584,6 +644,7 @@
     render();
   });
 
+  applyZoom();
   render();
 })();
 </script>
