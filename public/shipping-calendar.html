@@ -146,9 +146,9 @@
     <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
     <span style="font-size:13px;font-weight:700;margin-left:12px;">📦 発送確認カレンダー</span>
     <div style="flex:1;"></div>
-    <button class="nav-btn" id="prevMonthBtn">◀</button>
-    <input type="month" id="monthPicker" style="margin:0 6px;" />
-    <button class="nav-btn" id="nextMonthBtn">▶</button>
+    <button class="nav-btn" id="prevMonthBtn">◀ 前へ</button>
+    <span id="rangeLabel" style="margin:0 8px;font-size:13px;font-weight:600;color:#374151;min-width:180px;text-align:center;"></span>
+    <button class="nav-btn" id="nextMonthBtn">次へ ▶</button>
     <div id="zoomControls">
       <button id="zoomOutBtn">－</button>
       <span id="zoomLabel">100%</span>
@@ -179,9 +179,9 @@
   const TZ = 'Asia/Tokyo';
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
 
-  const monthPicker      = document.getElementById('monthPicker');
   const prevMonthBtn     = document.getElementById('prevMonthBtn');
   const nextMonthBtn     = document.getElementById('nextMonthBtn');
+  const rangeLabel       = document.getElementById('rangeLabel');
   const calHead          = document.getElementById('calHead');
   const calBody          = document.getElementById('calBody');
   const calTable         = document.getElementById('calTable');
@@ -195,10 +195,8 @@
   const zoomOutBtn       = document.getElementById('zoomOutBtn');
   const timelinePane     = document.getElementById('timelinePane');
 
-  const now = new Date();
-  let currentYear  = now.getFullYear();
-  let currentMonth = now.getMonth() + 1;
-  monthPicker.value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+  // 表示開始オフセット（◀▶で±30日移動）
+  let offsetDays = 0;
 
   // ズーム設定（30%〜100%）
   const ZOOM_STEPS = [30, 40, 50, 60, 70, 80, 90, 100];
@@ -230,11 +228,28 @@
 
   function todayJst() { return toJstDateStr(new Date().toISOString()); }
 
-  function getDaysInMonth(y, m) {
+  // 当日-7日から69日間（1週前〜約2ヶ月先）の日付配列を生成
+  function getDaysInRange() {
     const days = [];
-    const total = new Date(y, m, 0).getDate();
-    for (let d = 1; d <= total; d++) days.push(`${y}-${pad2(m)}-${pad2(d)}`);
+    const start = addDays(todayJst(), offsetDays - 7);
+    for (let i = 0; i < 69; i++) days.push(addDays(start, i));
     return days;
+  }
+
+  // 当日列までスクロール
+  function scrollToToday() {
+    const todayTh = document.querySelector('#calHead th.is-today');
+    if (todayTh) {
+      const pane = document.getElementById('timelinePane');
+      pane.scrollLeft = todayTh.offsetLeft - 180;
+    }
+  }
+
+  function updateRangeLabel(days) {
+    if (!days.length) return;
+    const s = days[0].split('-').map(Number);
+    const e = days[days.length-1].split('-').map(Number);
+    rangeLabel.textContent = `${s[0]}/${String(s[1]).padStart(2,'0')}/${String(s[2]).padStart(2,'0')} 〜 ${e[0]}/${String(e[1]).padStart(2,'0')}/${String(e[2]).padStart(2,'0')}`;
   }
 
   function getWeekday(dateStr) {
@@ -341,11 +356,18 @@
              compareDates(rangeEnd,   days[0]) >= 0;
     });
 
+    // 発送日が早い順にソート
+    visibleProjects.sort((a, b) => {
+      const as = a.shipping_date ? a.shipping_date.slice(0,10) : (toJstDateStr(a.usage_start_at || a.usage_start) || '9999');
+      const bs = b.shipping_date ? b.shipping_date.slice(0,10) : (toJstDateStr(b.usage_start_at || b.usage_start) || '9999');
+      return as < bs ? -1 : as > bs ? 1 : 0;
+    });
+
     if (!visibleProjects.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
       td.colSpan = days.length + 1;
-      td.textContent = 'この月に案件はありません';
+      td.textContent = 'この期間に案件はありません';
       td.style.cssText = 'text-align:center;padding:24px;color:#9ca3af;font-size:13px;';
       tr.appendChild(td);
       calBody.appendChild(tr);
@@ -585,11 +607,13 @@
     loadingMsg.style.display = 'block';
     calTable.style.display = 'none';
     try {
-      const days     = getDaysInMonth(currentYear, currentMonth);
+      const days     = getDaysInRange();
+      updateRangeLabel(days);
       const projects = await fetchProjects();
       buildTable(projects, days);
       loadingMsg.style.display = 'none';
       calTable.style.display = '';
+      if (offsetDays === 0) scrollToToday();
     } catch(e) {
       loadingMsg.textContent = 'エラーが発生しました';
       errorText.textContent = e.message;
@@ -626,23 +650,9 @@
     setTimeout(() => { dragMoved = false; }, 0);
   });
 
-  monthPicker.addEventListener('change', () => {
-    const [y, m] = monthPicker.value.split('-').map(Number);
-    currentYear = y; currentMonth = m;
-    render();
-  });
-  prevMonthBtn.addEventListener('click', () => {
-    currentMonth--;
-    if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-    monthPicker.value = `${currentYear}-${pad2(currentMonth)}`;
-    render();
-  });
-  nextMonthBtn.addEventListener('click', () => {
-    currentMonth++;
-    if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-    monthPicker.value = `${currentYear}-${pad2(currentMonth)}`;
-    render();
-  });
+  // ◀▶ボタンで表示期間を±30日移動
+  prevMonthBtn.addEventListener('click', () => { offsetDays -= 30; render(); });
+  nextMonthBtn.addEventListener('click', () => { offsetDays += 30; render(); });
 
   applyZoom();
   render();
