@@ -9,6 +9,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; background: #f8fafc; color: #111827; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    #pageWrap { display: flex; flex: 1; overflow: hidden; }
 
     #navBar {
       background: #fff;
@@ -113,6 +114,50 @@
 
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
 
+    /* 右ペイン */
+    #pageWrap { display: flex; flex: 1; overflow: hidden; }
+    #mainPane { flex: 1; overflow: auto; }
+    #detailPane {
+      width: 0; overflow: hidden; transition: width 0.25s ease;
+      border-left: 1px solid #e5e7eb; background: #fff;
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    #detailPane.open { width: 360px; }
+    #detailInner { padding: 16px; overflow-y: auto; flex: 1; font-size: 13px; }
+    #detailInner h3 { font-size: 15px; font-weight: 800; margin-bottom: 12px; color: #1e3a5f; }
+    .detail-row { margin-bottom: 8px; line-height: 1.6; }
+    .detail-label { font-size: 11px; font-weight: 700; color: #6b7280; }
+    .detail-val { color: #111827; }
+    #detailMemo {
+      margin-top: 12px; padding: 10px; background: #f9fafb;
+      border: 1px solid #e5e7eb; border-radius: 8px;
+      font-size: 12px; white-space: pre-wrap; line-height: 1.7;
+      color: #374151; max-height: 200px; overflow-y: auto;
+    }
+    #detailClose {
+      padding: 8px 16px; border-bottom: 1px solid #e5e7eb;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #detailClose button {
+      background: none; border: none; cursor: pointer;
+      font-size: 18px; color: #6b7280; line-height: 1;
+    }
+    #detailClose button:hover { color: #111; }
+    .detail-actions {
+      padding: 12px 16px; border-top: 1px solid #e5e7eb;
+      display: flex; gap: 8px;
+    }
+    .detail-actions a, .detail-actions button {
+      flex: 1; padding: 8px; border-radius: 8px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      text-align: center; text-decoration: none;
+      border: 1px solid #e5e7eb;
+    }
+    .btn-edit { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe !important; }
+    .btn-edit:hover { background: #dbeafe; }
+    .btn-delete { background: #fff; color: #dc2626; border-color: #fca5a5 !important; }
+    .btn-delete:hover { background: #fee2e2; }
+
     /* ソート中バッジ */
     #sortBadge {
       display: none;
@@ -143,6 +188,7 @@
     <span id="errorText"></span>
   </div>
 
+  <div id="pageWrap">
   <div id="mainPane">
     <div id="zoomWrapper">
       <div id="loadingMsg">読み込み中...</div>
@@ -152,6 +198,20 @@
       </table>
     </div>
   </div>
+
+  </div><!-- /mainPane -->
+  <div id="detailPane">
+    <div id="detailClose">
+      <span style="font-size:13px;font-weight:700;">📋 案件詳細</span>
+      <button onclick="closeDetail()">✕</button>
+    </div>
+    <div id="detailInner"></div>
+    <div class="detail-actions">
+      <a id="btnEdit" class="btn-edit" href="#">✏️ 案件編集</a>
+      <button id="btnDelete" class="btn-delete" onclick="deleteProject()">🗑️ 案件削除</button>
+    </div>
+  </div>
+  </div><!-- /pageWrap -->
 
 <script>
 (() => {
@@ -281,7 +341,7 @@
 
   async function fetchProjects() {
     const token = localStorage.getItem('token') || '';
-    const res = await fetch('/api/projects', {
+    const res = await fetch('/api/projects/interpreter', {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
     });
     const json = await res.json();
@@ -462,7 +522,7 @@
             clearTimeout(pressTimer);
             if (ev.button !== 0) return;
             if (!isLongPress && !dragMoved) {
-              location.href = `/project-edit.html?id=${p.id}&return=${encodeURIComponent(location.pathname + location.search)}`;
+              openDetail(p);
             }
           });
           block.addEventListener('mouseleave', () => clearTimeout(pressTimer));
@@ -537,6 +597,58 @@
     mainPane.style.cursor = '';
     setTimeout(() => { dragMoved = false; }, 0);
   });
+
+  let currentProjectId = null;
+
+  function openDetail(p) {
+    currentProjectId = p.id;
+    const pane = document.getElementById('detailPane');
+    const inner = document.getElementById('detailInner');
+    const btnEdit = document.getElementById('btnEdit');
+
+    const startTime = getTimeStr(p.usage_start_at || p.usage_start);
+    const endTime   = getTimeStr(p.usage_end_at   || p.usage_end);
+    const timeStr   = p.is_all_day ? '終日' : `${startTime}〜${endTime}`;
+    const startDate = toJstDateStr(p.usage_start_at || p.usage_start) || '';
+    const endDate   = toJstDateStr(p.usage_end_at   || p.usage_end)   || '';
+
+    const statusMap = { draft:'未確定', confirmed:'確定', cancelled:'キャンセル' };
+
+    inner.innerHTML = `
+      <h3>${p.title || '(無題)'}</h3>
+      <div class="detail-row"><span class="detail-label">ステータス</span><br><span class="detail-val">${statusMap[p.status] || p.status || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">クライアント</span><br><span class="detail-val">${p.client_name || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">会場</span><br><span class="detail-val">${p.venue || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">担当者</span><br><span class="detail-val">${p.person_in_charge || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">使用期間</span><br><span class="detail-val">${startDate} 〜 ${endDate}</span></div>
+      <div class="detail-row"><span class="detail-label">時間</span><br><span class="detail-val">${timeStr}</span></div>
+      ${p.memo ? `<div class="detail-label" style="margin-top:12px;">📝 メモ</div><div id="detailMemo">${p.memo}</div>` : ''}
+    `;
+
+    btnEdit.href = `/project-edit.html?id=${p.id}&return=${encodeURIComponent(location.pathname)}`;
+    pane.classList.add('open');
+  }
+
+  function closeDetail() {
+    document.getElementById('detailPane').classList.remove('open');
+    currentProjectId = null;
+  }
+
+  async function deleteProject() {
+    if (!currentProjectId) return;
+    if (!confirm('この案件を通訳カレンダーから非表示にしますか？\n（他のカレンダーには影響しません）')) return;
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(`/api/projects/${currentProjectId}/hide-interpreter`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      closeDetail();
+      render();
+    } else {
+      alert('削除に失敗しました');
+    }
+  }
 
   prevBtn.addEventListener('click', () => { offsetDays -= 30; render(); });
   nextBtn.addEventListener('click', () => { offsetDays += 30; render(); });

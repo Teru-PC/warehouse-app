@@ -144,7 +144,6 @@
 
   <div id="navBar">
     <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
-    <button class="nav-btn" onclick="location.href='/staff-calendar.html'">👤 通訳カレンダー</button>
     <span style="font-size:13px;font-weight:700;margin-left:12px;">📦 発送確認カレンダー</span>
     <div style="flex:1;"></div>
     <button class="nav-btn" id="prevMonthBtn">◀ 前へ</button>
@@ -229,21 +228,12 @@
 
   function todayJst() { return toJstDateStr(new Date().toISOString()); }
 
-  // 当日-7日から69日間（1週前〜約2ヶ月先）の日付配列を生成
+  // 当日+offsetDaysから62日間（約2ヶ月）の日付配列を生成
   function getDaysInRange() {
     const days = [];
-    const start = addDays(todayJst(), offsetDays - 7);
-    for (let i = 0; i < 69; i++) days.push(addDays(start, i));
+    const start = addDays(todayJst(), offsetDays);
+    for (let i = 0; i < 62; i++) days.push(addDays(start, i));
     return days;
-  }
-
-  // 当日列までスクロール
-  function scrollToToday() {
-    const todayTh = document.querySelector('#calHead th.is-today');
-    if (todayTh) {
-      const pane = document.getElementById('timelinePane');
-      pane.scrollLeft = todayTh.offsetLeft - 180;
-    }
   }
 
   function updateRangeLabel(days) {
@@ -283,7 +273,7 @@
 
   async function fetchProjects() {
     const token = localStorage.getItem('token') || '';
-    const res = await fetch('/api/projects', {
+    const res = await fetch('/api/projects/shipping', {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
     });
     const json = await res.json();
@@ -587,10 +577,10 @@
   }
 
   async function deleteProject(projectId) {
-    if (!confirm('この案件を削除しますか？\nこの操作は取り消せません。')) return;
+    if (!confirm('この案件を発送確認カレンダーから非表示にしますか？\n（他のカレンダーには影響しません）')) return;
     try {
       const token = localStorage.getItem('token') || '';
-      const res = await fetch(`/api/projects/${projectId}`, {
+      const res = await fetch(`/api/projects/${projectId}/hide-shipping`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -614,7 +604,6 @@
       buildTable(projects, days);
       loadingMsg.style.display = 'none';
       calTable.style.display = '';
-      if (offsetDays === 0) scrollToToday();
     } catch(e) {
       loadingMsg.textContent = 'エラーが発生しました';
       errorText.textContent = e.message;
