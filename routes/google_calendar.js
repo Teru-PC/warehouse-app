@@ -140,6 +140,11 @@ async function importFromGoogle() {
     let updatedCount = 0; 
 
     for (const event of events) {
+      // 日時の取得（先に行う）
+      const startStr = event.start?.dateTime || event.start?.date;
+      const endStr   = event.end?.dateTime   || event.end?.date;
+      if (!startStr || !endStr) continue;
+
       // 既にインポート済みか確認
       const existing = await pool.query(
         "SELECT id FROM projects WHERE google_event_id=$1",
@@ -147,7 +152,7 @@ async function importFromGoogle() {
       );
       if (existing.rows.length) continue;
 
-      // ゴミ箱に移動済みの場合もスキップ（google_event_id or タイトル+日時で判定）
+      // ゴミ箱に移動済みの場合もスキップ
       const deletedByEventId = await pool.query(
         "SELECT id FROM deleted_projects WHERE google_event_id=$1",
         [event.id]
@@ -159,11 +164,6 @@ async function importFromGoogle() {
         [event.summary || "(無題)", new Date(startStr).toISOString()]
       );
       if (deletedByTitle.rows.length) continue;
-
-      // 日時の取得
-      const startStr = event.start?.dateTime || event.start?.date;
-      const endStr   = event.end?.dateTime   || event.end?.date;
-      if (!startStr || !endStr) continue;
 
       const usageStart = new Date(startStr);
       const usageEnd   = new Date(endStr);

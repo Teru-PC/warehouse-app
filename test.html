@@ -137,19 +137,19 @@
     #detailClose {
       padding: 8px 16px; border-bottom: 1px solid #e5e7eb;
       display: flex; justify-content: space-between; align-items: center;
-      gap: 8px; flex-shrink: 0;
     }
-    .close-btn {
+    #detailClose button {
       background: none; border: none; cursor: pointer;
-      font-size: 18px; color: #6b7280; line-height: 1; flex-shrink: 0;
+      font-size: 18px; color: #6b7280; line-height: 1;
     }
-    .close-btn:hover { color: #111; }
+    #detailClose button:hover { color: #111; }
     .detail-actions {
-      display: flex; gap: 6px; flex: 1;
+      padding: 12px 16px; border-top: 1px solid #e5e7eb;
+      display: flex; gap: 8px;
     }
     .detail-actions a, .detail-actions button {
-      flex: 1; padding: 6px 4px; border-radius: 8px;
-      font-size: 11px; font-weight: 700; cursor: pointer;
+      flex: 1; padding: 8px; border-radius: 8px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
       text-align: center; text-decoration: none;
       border: 1px solid #e5e7eb;
     }
@@ -189,25 +189,28 @@
   </div>
 
   <div id="pageWrap">
-    <div id="mainPane">
-      <div id="zoomWrapper">
-        <div id="loadingMsg">読み込み中...</div>
-        <table id="calTable" style="display:none;">
-          <thead id="calHead"></thead>
-          <tbody id="calBody"></tbody>
-        </table>
-      </div>
+  <div id="mainPane">
+    <div id="zoomWrapper">
+      <div id="loadingMsg">読み込み中...</div>
+      <table id="calTable" style="display:none;">
+        <thead id="calHead"></thead>
+        <tbody id="calBody"></tbody>
+      </table>
     </div>
-    <div id="detailPane">
-      <div id="detailClose">
-        <div class="detail-actions">
-          <a id="btnEdit" class="btn-edit" href="#">✏️ 案件編集</a>
-          <button id="btnDelete" class="btn-delete" onclick="deleteProject()">🗑️ 案件削除</button>
-        </div>
-        <button class="close-btn" id="closeDetailBtn">✕</button>
-      </div>
-      <div id="detailInner"></div>
+  </div>
+
+  </div><!-- /mainPane -->
+  <div id="detailPane">
+    <div id="detailClose">
+      <span style="font-size:13px;font-weight:700;">📋 案件詳細</span>
+      <button onclick="closeDetail()">✕</button>
     </div>
+    <div id="detailInner"></div>
+    <div class="detail-actions">
+      <a id="btnEdit" class="btn-edit" href="#">✏️ 案件編集</a>
+      <button id="btnDelete" class="btn-delete" onclick="deleteProject()">🗑️ 案件削除</button>
+    </div>
+  </div>
   </div><!-- /pageWrap -->
 
 <script>
@@ -308,20 +311,12 @@
         // 「、」「,」「，」「　」「 」で分割
         const parts = m[1].split(/[、,，　\s]+/);
         for (const part of parts) {
-          // 「さん」を除去、→以降を除去、（）内を除去、前後の空白を除去
+          // 「さん」を除去、前後の空白・記号を除去
           const name = part
-            .replace(/さん/g, '')
-            .replace(/→.*/g, '')
-            .replace(/（[^）]*）/g, '')
-            .replace(/\([^)]*\)/g, '')
+            .replace(/さん$/g, '')
             .replace(/[　\s]/g, '')
             .trim();
-          // 数字始まり、英数字のみ、「名」で終わるものは除外
-          if (name.length > 0
-            && !/^\d/.test(name)
-            && !/^[a-zA-Z0-9]+$/.test(name)
-            && !/名$/.test(name)
-          ) names.add(name);
+          if (name.length > 0) names.add(name);
         }
       }
     }
@@ -654,8 +649,6 @@
       alert('削除に失敗しました');
     }
   }
-
-  document.getElementById('closeDetailBtn').addEventListener('click', closeDetail);
 
   prevBtn.addEventListener('click', () => { offsetDays -= 30; render(); });
   nextBtn.addEventListener('click', () => { offsetDays += 30; render(); });
