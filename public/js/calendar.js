@@ -444,8 +444,21 @@
         const endDayKey   = endIso
           ? jstDayKeyFromUtcMs(new Date(new Date(endIso).getTime() - 1).getTime())
           : startDayKey;
-        const dispStart = visibleDays.find(function(d) { return d >= startDayKey; });
-        const dispEnd   = visibleDays.slice().reverse().find(function(d) { return d <= endDayKey; }) || dispStart;
+
+        // ★修正: 案件の終了日が表示範囲の最初の日より前なら表示しない
+        //         案件の開始日が表示範囲の最後の日より後なら表示しない
+        const firstVisibleDay = visibleDays[0];
+        const lastVisibleDay  = visibleDays[visibleDays.length - 1];
+        if (endDayKey < firstVisibleDay) return { p: p, dispStart: null, dispEnd: null };
+        if (startDayKey > lastVisibleDay) return { p: p, dispStart: null, dispEnd: null };
+
+        // 表示範囲内に収まる開始・終了日
+        const dispStart = startDayKey >= firstVisibleDay ? startDayKey : firstVisibleDay;
+        const dispEnd   = endDayKey <= lastVisibleDay   ? endDayKey   : lastVisibleDay;
+
+        // dispStartが実際にvisibleDaysに含まれているか確認
+        if (!visibleDays.includes(dispStart)) return { p: p, dispStart: null, dispEnd: null };
+
         return { p: p, dispStart: dispStart, dispEnd: dispEnd };
       })
       .filter(function(x) { return x.dispStart; })
