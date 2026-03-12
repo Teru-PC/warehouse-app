@@ -11,10 +11,15 @@
     body { font-family: sans-serif; overflow: hidden; height: 100vh; }
 
     .cal-nav-btn {
-      width: 88px; padding: 6px;
+      width: 96px; height: 34px;
+      padding: 0 6px;
       border: 1px solid #e5e7eb; background: #fff;
       border-radius: 10px; cursor: pointer;
       font-weight: 700; font-size: 12px;
+      white-space: nowrap; overflow: hidden;
+      text-align: center; display: inline-flex;
+      align-items: center; justify-content: center;
+      text-decoration: none; box-sizing: border-box;
     }
     .cal-error { color: #b91c1c; font-size: 12px; }
 
@@ -171,10 +176,10 @@
         <a class="cal-nav-btn-small" href="/equipment.html">機材管理</a>
       </div>
       <div class="cal-nav-mid">
-        <a class="cal-nav-btn" href="/shipping-calendar.html" style="text-decoration:none;text-align:center;line-height:2;background:#e0f7fa;color:#006064;border-color:#4dd0e1;">発送確認</a>
-        <a class="cal-nav-btn" href="/staff-calendar.html" style="text-decoration:none;text-align:center;white-space:nowrap;width:auto;background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7;">👤 通訳</a>
-        <button class="cal-nav-btn" id="gcalBtn" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;white-space:nowrap;width:auto;">📅 Google連携</button>
-        <a class="cal-nav-btn" href="/trash.html" style="text-decoration:none;text-align:center;line-height:2;background:#fee2e2;color:#b91c1c;border-color:#fca5a5;">🗑️ ゴミ箱</a>
+        <a class="cal-nav-btn" href="/shipping-calendar.html" style="text-decoration:none;text-align:center;background:#e0f7fa;color:#006064;border-color:#4dd0e1;">🚚 発送確認</a>
+        <a class="cal-nav-btn" href="/staff-calendar.html" style="text-decoration:none;text-align:center;background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7;">👤 通訳</a>
+        <button class="cal-nav-btn" id="gcalBtn" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">📅 Google連携</button>
+        <a class="cal-nav-btn" href="/trash.html" style="text-decoration:none;text-align:center;background:#fee2e2;color:#b91c1c;border-color:#fca5a5;">🗑️ ゴミ箱</a>
         <span class="cal-error" id="errorText"></span>
       </div>
       <button class="cal-nav-btn" id="nextBtn" type="button">進む</button>
