@@ -69,7 +69,7 @@
       text-align: left; cursor: pointer;
     }
     .mobile-menu-btn:hover { background: #f3f4f6; }
-    @media (max-width: 900px) {
+    @media (max-width: 640px) {
       #hamburgerBtn { display: block; }
       header .pill, header a.pill { display: none; }
       header #addBtn { display: none; }
@@ -82,7 +82,6 @@
     <div id="mobileMenuInner">
       <button id="mobileMenuClose">✕</button>
       <a class="mobile-menu-btn" href="/calendar.html">📅 カレンダー</a>
-      <a class="mobile-menu-btn" href="/qr-list.html">📋 QR一覧</a>
       <button class="mobile-menu-btn" id="mobileAddBtn">＋ 機材を追加</button>
     </div>
   </div>
@@ -92,7 +91,6 @@
     <button id="hamburgerBtn">☰</button>
     <div style="display:flex; gap:6px; align-items:center; margin-left:auto; flex-shrink:0;">
       <a class="pill" href="/calendar.html" style="white-space:nowrap;">← カレンダー</a>
-      <a class="pill" href="/qr-list.html" style="white-space:nowrap;">QR一覧</a>
       <button class="btn btn-primary" id="addBtn" style="white-space:nowrap; font-size:12px; padding:6px 10px;">＋ 追加</button>
     </div>
   </header>

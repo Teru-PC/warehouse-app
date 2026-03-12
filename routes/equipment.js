@@ -1,15 +1,13 @@
 const express = require("express");
 const pool = require("../db");
 const auth = require("../middleware/auth");
-const QRCode = require("qrcode");
-
 const router = express.Router();
 
 // GET /api/equipment - 機材一覧
 router.get("/", auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, name, total_quantity, image_url, qr_png_base64, created_at
+      SELECT id, name, total_quantity, image_url, created_at
       FROM equipment
       ORDER BY id ASC
     `);
@@ -25,7 +23,7 @@ router.get("/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      "SELECT id, name, total_quantity, image_url, qr_png_base64, created_at FROM equipment WHERE id = $1",
+      "SELECT id, name, total_quantity, image_url, created_at FROM equipment WHERE id = $1",
       [id]
     );
     if (result.rows.length === 0) {
@@ -56,12 +54,6 @@ router.post("/", auth, async (req, res) => {
     );
     const eq = result.rows[0];
 
-    // QRコードを生成してDBに保存
-    const url = await QRCode.toDataURL(String(eq.id), { width: 200, margin: 2 });
-    const base64 = url.replace(/^data:image\/png;base64,/, "");
-    await pool.query("UPDATE equipment SET qr_png_base64 = $1 WHERE id = $2", [base64, eq.id]);
-    eq.qr_png_base64 = base64;
-
     return res.status(201).json(eq);
   } catch (err) {
     console.error("POST /equipment error:", err);
@@ -82,7 +74,7 @@ router.put("/:id", auth, async (req, res) => {
     }
 
     const result = await pool.query(
-      "UPDATE equipment SET name = $1, total_quantity = $2, image_url = $3 WHERE id = $4 RETURNING id, name, total_quantity, image_url, qr_png_base64, created_at",
+      "UPDATE equipment SET name = $1, total_quantity = $2, image_url = $3 WHERE id = $4 RETURNING id, name, total_quantity, image_url, created_at",
       [name.trim(), Number(total_quantity), image_url || null, id]
     );
     if (result.rows.length === 0) {
