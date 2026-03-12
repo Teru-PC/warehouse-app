@@ -144,6 +144,7 @@
 
   <div id="navBar">
     <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
+    <button class="nav-btn" onclick="location.href='/staff-calendar.html'" style="margin-left:8px;background:#f0fdf4;border-color:#86efac;color:#166534;">👤 通訳カレンダー</button>
     <span style="font-size:13px;font-weight:700;margin-left:12px;">📦 発送確認カレンダー</span>
     <div style="flex:1;"></div>
     <button class="nav-btn" id="prevMonthBtn">◀ 前へ</button>
@@ -499,17 +500,19 @@
       const status = { draft: '仮', confirmed: '確定', cancelled: 'キャンセル' }[project.status] || '';
 
       let html = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <h2 style="margin:0;font-size:14px;">${project.title || '(無題)'}</h2>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <button onclick="location.href='/project-edit.html?id=${project.id}&return=${encodeURIComponent(location.pathname)}'"
+            style="flex:1;padding:6px 0;background:#fff;color:#2563eb;border:2px solid #2563eb;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+            ✏️ 案件編集
+          </button>
+          <button id="deleteProjectBtn"
+            style="flex:1;padding:6px 0;background:#fff;color:#ef4444;border:2px solid #ef4444;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+            🗑️ 案件削除
+          </button>
           <button id="closeChecklistBtn" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280;padding:0 4px;">✕</button>
         </div>
-        <div class="meta" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <span>${status}</span>
-          <button onclick="location.href='/project-edit.html?id=${project.id}'"
-            style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
-            編集ページへ →
-          </button>
-        </div>
+        <h2 style="margin:0 0 4px;font-size:15px;">${project.title || '(無題)'}</h2>
+        <div class="meta" style="margin-bottom:12px;"><span>${status}</span></div>
       `;
 
       const dbItems    = items.filter(i => !i.fixed);
@@ -547,14 +550,7 @@
         }
       }
 
-      html += `
-        <div style="display:flex;justify-content:flex-end;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;">
-          <button id="deleteProjectBtn"
-            style="padding:6px 16px;background:#fff;color:#ef4444;border:2px solid #ef4444;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
-            🗑️ 案件削除
-          </button>
-        </div>
-      `;
+      
       checklistContent.innerHTML = html;
 
       document.getElementById('closeChecklistBtn').addEventListener('click', () => {
