@@ -34,11 +34,62 @@
     .img-preview { width: 100%; height: 140px; object-fit: cover; border-radius: 10px; display: none; }
     .err { color: #b91c1c; font-size: 13px; }
     .empty { text-align: center; color: #9ca3af; padding: 40px; }
+
+    /* ===== スマホ対応 ===== */
+    #hamburgerBtn {
+      display: none;
+      background: none; border: none;
+      font-size: 22px; cursor: pointer;
+      padding: 4px 8px; flex-shrink: 0;
+    }
+    #mobileMenu {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 500;
+    }
+    #mobileMenu.open { display: block; }
+    #mobileMenuInner {
+      position: absolute; top: 0; left: 0;
+      width: 240px; height: 100%;
+      background: #fff;
+      padding: 16px 12px;
+      display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+    }
+    #mobileMenuClose {
+      align-self: flex-end; background: none; border: none;
+      font-size: 22px; cursor: pointer; color: #374151;
+    }
+    .mobile-menu-btn {
+      display: block; width: 100%;
+      padding: 10px 14px; border-radius: 10px;
+      border: 1px solid #e5e7eb; background: #f9fafb;
+      font-size: 14px; font-weight: 700;
+      text-decoration: none; color: #111827;
+      text-align: left; cursor: pointer;
+    }
+    .mobile-menu-btn:hover { background: #f3f4f6; }
+    @media (max-width: 640px) {
+      #hamburgerBtn { display: block; }
+      header .pill, header a.pill { display: none; }
+      header #addBtn { display: none; }
+    }
   </style>
 </head>
 <body>
+  <!-- スマホ ハンバーガーメニュー -->
+  <div id="mobileMenu">
+    <div id="mobileMenuInner">
+      <button id="mobileMenuClose">✕</button>
+      <a class="mobile-menu-btn" href="/calendar.html">📅 カレンダー</a>
+      <a class="mobile-menu-btn" href="/qr-list.html">📋 QR一覧</a>
+      <button class="mobile-menu-btn" id="mobileAddBtn">＋ 機材を追加</button>
+    </div>
+  </div>
+
   <header>
     <h1>機材管理</h1>
+    <button id="hamburgerBtn">☰</button>
     <div style="display:flex; gap:6px; align-items:center; margin-left:auto; flex-shrink:0;">
       <a class="pill" href="/calendar.html" style="white-space:nowrap;">← カレンダー</a>
       <a class="pill" href="/qr-list.html" style="white-space:nowrap;">QR一覧</a>
@@ -378,6 +429,24 @@
 
     load();
   })();
+  </script>
+
+  <script>
+    // ハンバーガーメニュー
+    (function() {
+      const menu = document.getElementById('mobileMenu');
+      const openBtn = document.getElementById('hamburgerBtn');
+      const closeBtn = document.getElementById('mobileMenuClose');
+      if (!menu || !openBtn) return;
+      openBtn.addEventListener('click', () => menu.classList.add('open'));
+      closeBtn.addEventListener('click', () => menu.classList.remove('open'));
+      menu.addEventListener('click', (e) => { if (e.target === menu) menu.classList.remove('open'); });
+      const mobileAddBtn = document.getElementById('mobileAddBtn');
+      if (mobileAddBtn) mobileAddBtn.addEventListener('click', () => {
+        menu.classList.remove('open');
+        document.getElementById('addBtn') && document.getElementById('addBtn').click();
+      });
+    })();
   </script>
 </body>
 </html>

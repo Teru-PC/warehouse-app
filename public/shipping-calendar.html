@@ -138,11 +138,69 @@
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
 
     #zoomWrapper { transform-origin: top left; }
+
+    /* ===== スマホ対応 ===== */
+    #hamburgerBtn {
+      display: none;
+      background: none; border: none;
+      font-size: 22px; cursor: pointer;
+      padding: 4px 8px; flex-shrink: 0;
+    }
+    #mobileMenu {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 500;
+    }
+    #mobileMenu.open { display: block; }
+    #mobileMenuInner {
+      position: absolute; top: 0; left: 0;
+      width: 240px; height: 100%;
+      background: #fff;
+      padding: 16px 12px;
+      display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+    }
+    #mobileMenuClose {
+      align-self: flex-end; background: none; border: none;
+      font-size: 22px; cursor: pointer; color: #374151;
+    }
+    .mobile-menu-btn {
+      display: block; width: 100%;
+      padding: 10px 14px; border-radius: 10px;
+      border: 1px solid #e5e7eb; background: #f9fafb;
+      font-size: 14px; font-weight: 700;
+      text-decoration: none; color: #111827;
+      text-align: left; cursor: pointer;
+    }
+    .mobile-menu-btn:hover { background: #f3f4f6; }
+    @media (max-width: 640px) {
+      #hamburgerBtn { display: block; }
+      #navBar .nav-btn:not(#prevMonthBtn):not(#nextMonthBtn) { display: none; }
+      #navBar span:not(#rangeLabel):not(#errorText) { display: none; }
+      #zoomControls { display: none; }
+      #rangeLabel { font-size: 12px; min-width: 120px; }
+    }
   </style>
 </head>
 <body>
 
+  <!-- スマホ ハンバーガーメニュー -->
+  <div id="mobileMenu">
+    <div id="mobileMenuInner">
+      <button id="mobileMenuClose">✕</button>
+      <a class="mobile-menu-btn" href="/calendar.html">📅 カレンダーへ</a>
+      <a class="mobile-menu-btn" href="/staff-calendar.html" style="background:#f0fdf4;border-color:#86efac;color:#166534;">👤 通訳カレンダー</a>
+      <div style="border-top:1px solid #e5e7eb; padding-top:8px; font-size:12px; color:#6b7280;">ズーム</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="mobile-menu-btn" id="mobileZoomOut" style="width:auto;padding:8px 16px;">－</button>
+        <span id="mobileZoomLabel" style="font-size:13px;color:#374151;">100%</span>
+        <button class="mobile-menu-btn" id="mobileZoomIn" style="width:auto;padding:8px 16px;">＋</button>
+      </div>
+    </div>
+  </div>
+
   <div id="navBar">
+    <button id="hamburgerBtn">☰</button>
     <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
     <button class="nav-btn" onclick="location.href='/staff-calendar.html'" style="margin-left:8px;background:#f0fdf4;border-color:#86efac;color:#166534;">👤 通訳カレンダー</button>
     <span style="font-size:13px;font-weight:700;margin-left:12px;">📦 発送確認カレンダー</span>
@@ -649,6 +707,31 @@
   render();
 })();
 </script>
+
+  <script>
+    // ハンバーガーメニュー
+    (function() {
+      const menu = document.getElementById('mobileMenu');
+      const openBtn = document.getElementById('hamburgerBtn');
+      const closeBtn = document.getElementById('mobileMenuClose');
+      if (!menu || !openBtn) return;
+      openBtn.addEventListener('click', () => menu.classList.add('open'));
+      closeBtn.addEventListener('click', () => menu.classList.remove('open'));
+      menu.addEventListener('click', (e) => { if (e.target === menu) menu.classList.remove('open'); });
+      // モバイルズームボタンを本体のズームボタンと同期
+      const mzIn  = document.getElementById('mobileZoomIn');
+      const mzOut = document.getElementById('mobileZoomOut');
+      const mzLabel = document.getElementById('mobileZoomLabel');
+      if (mzIn) mzIn.addEventListener('click', () => {
+        document.getElementById('zoomInBtn') && document.getElementById('zoomInBtn').click();
+        if (mzLabel) mzLabel.textContent = document.getElementById('zoomLabel').textContent;
+      });
+      if (mzOut) mzOut.addEventListener('click', () => {
+        document.getElementById('zoomOutBtn') && document.getElementById('zoomOutBtn').click();
+        if (mzLabel) mzLabel.textContent = document.getElementById('zoomLabel').textContent;
+      });
+    })();
+  </script>
 </body>
 </html>
 ```

@@ -192,13 +192,68 @@
     .cal-project.cal-color--10{ background:#c7d2fe; }
     .cal-project.cal-color--11{ background:#e9d5ff; }
     .cal-project.cal-color--12{ background:#fbcfe8; }
+
+    /* ===== スマホ対応 ===== */
+    #hamburgerBtn {
+      display: none;
+      background: none; border: none;
+      font-size: 22px; cursor: pointer;
+      padding: 4px 8px; flex-shrink: 0;
+    }
+    #mobileMenu {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 500;
+    }
+    #mobileMenu.open { display: block; }
+    #mobileMenuInner {
+      position: absolute; top: 0; left: 0;
+      width: 240px; height: 100%;
+      background: #fff;
+      padding: 16px 12px;
+      display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+    }
+    #mobileMenuClose {
+      align-self: flex-end; background: none; border: none;
+      font-size: 22px; cursor: pointer; color: #374151;
+    }
+    .mobile-menu-btn {
+      display: block; width: 100%;
+      padding: 10px 14px; border-radius: 10px;
+      border: 1px solid #e5e7eb; background: #f9fafb;
+      font-size: 14px; font-weight: 700;
+      text-decoration: none; color: #111827;
+      text-align: left; cursor: pointer;
+    }
+    .mobile-menu-btn:hover { background: #f3f4f6; }
+    @media (max-width: 640px) {
+      #hamburgerBtn { display: block; }
+      .cal-nav-left { display: none; }
+      .cal-nav-mid { display: none; }
+      #prevBtn, #nextBtn { font-size: 11px; padding: 5px 8px; }
+    }
   </style>
 </head>
 <body>
 
+  <!-- スマホ ハンバーガーメニュー -->
+  <div id="mobileMenu">
+    <div id="mobileMenuInner">
+      <button id="mobileMenuClose">✕</button>
+      <button class="mobile-menu-btn" id="mobileNewBtn">📝 新規作成</button>
+      <a class="mobile-menu-btn" href="/equipment.html">🔧 機材管理</a>
+      <a class="mobile-menu-btn" href="/shipping-calendar.html" style="background:#e0f7fa;color:#006064;border-color:#4dd0e1;">🚚 発送確認</a>
+      <a class="mobile-menu-btn" href="/staff-calendar.html" style="background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7;">👤 通訳</a>
+      <button class="mobile-menu-btn" id="mobileGcalBtn" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">📅 Google連携</button>
+      <a class="mobile-menu-btn" href="/trash.html" style="background:#fee2e2;color:#b91c1c;border-color:#fca5a5;">🗑️ ゴミ箱</a>
+    </div>
+  </div>
+
   <div id="navBar">
     <div class="cal-nav-row">
       <button class="cal-nav-btn" id="prevBtn" type="button">戻る</button>
+      <button id="hamburgerBtn">☰</button>
       <div class="cal-nav-left">
         <button class="cal-nav-btn-small" id="newBtn" type="button">新規作成</button>
         <a class="cal-nav-btn-small" href="/equipment.html">機材管理</a>
@@ -240,6 +295,26 @@
   <script src="/js/auth.js"></script>
   <script src="/js/calendar.js"></script>
   <script>
+    // ハンバーガーメニュー
+    (function() {
+      const menu = document.getElementById('mobileMenu');
+      const openBtn = document.getElementById('hamburgerBtn');
+      const closeBtn = document.getElementById('mobileMenuClose');
+      openBtn.addEventListener('click', () => menu.classList.add('open'));
+      closeBtn.addEventListener('click', () => menu.classList.remove('open'));
+      menu.addEventListener('click', (e) => { if (e.target === menu) menu.classList.remove('open'); });
+      // モバイルの新規作成・Google連携ボタン
+      const mobileNewBtn = document.getElementById('mobileNewBtn');
+      if (mobileNewBtn) mobileNewBtn.addEventListener('click', () => {
+        const ret = encodeURIComponent(location.pathname + location.search);
+        location.href = '/project-new.html?return=' + ret;
+      });
+      const mobileGcalBtn = document.getElementById('mobileGcalBtn');
+      if (mobileGcalBtn) mobileGcalBtn.addEventListener('click', () => {
+        document.getElementById('gcalBtn') && document.getElementById('gcalBtn').click();
+        menu.classList.remove('open');
+      });
+    })();
     // 時間未定エリア 折りたたみ機能
     (function() {
       const bar = document.getElementById('dateHeaderBar');
