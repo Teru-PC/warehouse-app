@@ -639,7 +639,7 @@
     currentProjectId = null;
   }
 
-  async function deleteProject() {
+  window.deleteProject = async function() {
     if (!currentProjectId) return;
     if (!confirm('この案件を通訳カレンダーから非表示にしますか？\n（他のカレンダーには影響しません）')) return;
     const token = localStorage.getItem('token') || '';

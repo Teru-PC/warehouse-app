@@ -231,8 +231,8 @@
   // 当日+offsetDaysから62日間（約2ヶ月）の日付配列を生成
   function getDaysInRange() {
     const days = [];
-    const start = addDays(todayJst(), offsetDays);
-    for (let i = 0; i < 62; i++) days.push(addDays(start, i));
+    const start = addDays(todayJst(), offsetDays - 14);
+    for (let i = 0; i < 76; i++) days.push(addDays(start, i));
     return days;
   }
 
@@ -604,6 +604,11 @@
       buildTable(projects, days);
       loadingMsg.style.display = 'none';
       calTable.style.display = '';
+      const todayCol = calHead.querySelector('th.is-today');
+      if (todayCol) {
+        const projectColWidth = 160;
+        timelinePane.scrollLeft = todayCol.offsetLeft - projectColWidth;
+      }
     } catch(e) {
       loadingMsg.textContent = 'エラーが発生しました';
       errorText.textContent = e.message;
