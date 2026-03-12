@@ -78,6 +78,33 @@
     #dateHeaderCorner {
       flex-shrink: 0; background: #fff;
       border-right: 1px solid #e5e7eb;
+      position: relative;
+    }
+    /* 折りたたみトグルボタン */
+    #alldayToggleBtn {
+      position: absolute; bottom: 4px; left: 50%;
+      transform: translateX(-50%);
+      width: 28px; height: 28px;
+      background: #f1f5f9; border: 1px solid #cbd5e1;
+      border-radius: 50%; cursor: pointer;
+      font-size: 12px; display: flex;
+      align-items: center; justify-content: center;
+      z-index: 10; transition: background 0.2s;
+      user-select: none;
+    }
+    #alldayToggleBtn:hover { background: #e2e8f0; }
+    /* 折りたたみ状態 */
+    #dateHeaderBar.allday-collapsed .cal-ship-btn-area {
+      overflow: hidden;
+      min-height: 0 !important;
+      height: 0 !important;
+      padding: 0 !important;
+    }
+    #dateHeaderBar.allday-collapsed .cal-allday-item {
+      display: none;
+    }
+    #dateHeaderBar.allday-collapsed .cal-day-head {
+      padding-bottom: 4px;
     }
     #dateHeaderScroll { flex: 1; overflow: hidden; }
     #daysHeader { display: grid; grid-auto-flow: column; }
@@ -89,6 +116,7 @@
     .cal-day-head.is-sun { background: #ffecec; }
     .cal-ship-btn-area {
       display: flex; flex-direction: column; gap: 2px; padding: 2px 4px;
+      transition: height 0.2s, min-height 0.2s;
     }
     .cal-ship-btn {
       display: block; width: 100%;
@@ -194,7 +222,9 @@
   </div>
 
   <div id="dateHeaderBar">
-    <div id="dateHeaderCorner"></div>
+    <div id="dateHeaderCorner">
+      <button id="alldayToggleBtn" title="時間未定エリアを開閉">▶</button>
+    </div>
     <div id="dateHeaderScroll">
       <div id="daysHeader"></div>
     </div>
@@ -209,6 +239,26 @@
 
   <script src="/js/auth.js"></script>
   <script src="/js/calendar.js"></script>
+  <script>
+    // 時間未定エリア 折りたたみ機能
+    (function() {
+      const bar = document.getElementById('dateHeaderBar');
+      const btn = document.getElementById('alldayToggleBtn');
+      // 最初は閉じた状態
+      bar.classList.add('allday-collapsed');
+      btn.textContent = '▶';
+
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const isCollapsed = bar.classList.toggle('allday-collapsed');
+        btn.textContent = isCollapsed ? '▶' : '▼';
+        // レイアウト再計算
+        setTimeout(function() {
+          window.dispatchEvent(new Event('resize'));
+        }, 220);
+      });
+    })();
+  </script>
   <script>
     const user = window.authUtils ? window.authUtils.getUser() : null;
 
