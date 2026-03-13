@@ -3,7 +3,7 @@
 <head>
   <script src="/js/auth.js"></script>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>通訳カレンダー</title>
   <link rel="icon" href="data:," />
   <style>
@@ -46,9 +46,45 @@
     #zoomControls button:hover { background: #f3f4f6; }
     #zoomLabel { font-size: 12px; color: #6b7280; min-width: 36px; text-align: center; }
 
-    #mainPane { flex: 1; overflow: auto; }
+    #mainPane { flex: 1; overflow: auto; position: relative; }
 
     #zoomWrapper { transform-origin: top left; }
+
+    /* 案件名固定レイヤー */
+    #staffFixedLayer {
+      position: absolute;
+      top: 0; left: 0;
+      z-index: 50;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #staffFixedLayer table {
+      border-collapse: collapse;
+      white-space: nowrap;
+      pointer-events: auto;
+    }
+    #staffFixedLayer td, #staffFixedLayer th {
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+      min-width: 100px;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+    #staffFixedLayer th {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 6px;
+      text-align: left;
+      padding-left: 8px;
+      background: #fff;
+    }
+    #staffFixedLayer tr.has-sort td { background: #eff6ff; }
 
     #calTable { border-collapse: collapse; white-space: nowrap; }
 
@@ -116,7 +152,7 @@
 
     /* 右ペイン */
     #pageWrap { display: flex; flex: 1; overflow: hidden; }
-    #mainPane { flex: 1; overflow: auto; }
+    #mainPane { flex: 1; overflow: auto; position: relative; }
     #detailPane {
       width: 0; overflow: hidden; transition: width 0.25s ease;
       border-left: 1px solid #e5e7eb; background: #fff;
@@ -248,6 +284,12 @@
 
   <div id="pageWrap">
     <div id="mainPane">
+      <div id="staffFixedLayer">
+        <table id="staffFixedTable">
+          <thead><tr id="staffFixedHead"></tr></thead>
+          <tbody id="staffFixedBody"></tbody>
+        </table>
+      </div>
       <div id="zoomWrapper">
         <div id="loadingMsg">読み込み中...</div>
         <table id="calTable" style="display:none;">
@@ -305,24 +347,10 @@
   function applyZoom() {
     const pct = ZOOM_STEPS[zoomIdx];
     const scale = pct / 100;
-    // スクロール位置を記憶してscale後に補正
-    const pane = zoomWrapper.parentElement;
-    const scrollLeft = pane ? pane.scrollLeft : 0;
-    const scrollTop  = pane ? pane.scrollTop  : 0;
-    const prevScale  = parseFloat(zoomWrapper.dataset.scale || '1');
-
-    zoomWrapper.dataset.scale = scale;
-    zoomWrapper.style.transformOrigin = '0 0';
     zoomWrapper.style.transform = `scale(${scale})`;
-    zoomWrapper.style.width  = `${100 / scale}%`;
+    zoomWrapper.style.width = `${100 / scale}%`;
     zoomWrapper.style.height = `${100 / scale}%`;
     zoomLabel.textContent = `${pct}%`;
-
-    // スクロール位置をscale比率で補正
-    if (pane) {
-      pane.scrollLeft = scrollLeft * (scale / prevScale);
-      pane.scrollTop  = scrollTop  * (scale / prevScale);
-    }
   }
   zoomInBtn.addEventListener('click', () => { if (zoomIdx < ZOOM_STEPS.length-1) { zoomIdx++; applyZoom(); } });
   zoomOutBtn.addEventListener('click', () => { if (zoomIdx > 0) { zoomIdx--; applyZoom(); } });
@@ -785,33 +813,83 @@
 
 
   <script>
-    // ピンチズーム（カレンダーエリアのみ）
+    // 案件名固定レイヤーの同期
     (function() {
-      const container = document.getElementById('mainPane') || document.getElementById('timelinePane');
-      if (!container) return;
-      let lastDist = null;
-      let pinching = false;
-      function getDist(t) {
-        const dx = t[0].clientX - t[1].clientX;
-        const dy = t[0].clientY - t[1].clientY;
-        return Math.sqrt(dx*dx + dy*dy);
+      const mainPane   = document.getElementById('mainPane');
+      const fixedLayer = document.getElementById('staffFixedLayer');
+      const fixedHead  = document.getElementById('staffFixedHead');
+      const fixedBody  = document.getElementById('staffFixedBody');
+      const fixedTable = document.getElementById('staffFixedTable');
+      if (!mainPane || !fixedLayer) return;
+
+      // テーブルが描画されたあとに固定レイヤーを構築
+      function buildFixedLayer() {
+        const calTable = document.getElementById('calTable');
+        if (!calTable || calTable.style.display === 'none') return;
+
+        // ヘッダー行の案件セルをコピー
+        const origTh = calTable.querySelector('thead tr th.th-staff');
+        if (origTh) {
+          fixedHead.innerHTML = '';
+          const th = document.createElement('th');
+          th.textContent = origTh.textContent;
+          th.style.height = origTh.getBoundingClientRect().height + 'px';
+          fixedHead.appendChild(th);
+        }
+
+        // ボディ行の案件セルをコピー
+        fixedBody.innerHTML = '';
+        const rows = calTable.querySelectorAll('tbody tr');
+        rows.forEach(function(row) {
+          const td = row.querySelector('td.td-staff');
+          if (!td) return;
+          const newRow = document.createElement('tr');
+          if (row.classList.contains('has-sort')) newRow.classList.add('has-sort');
+          const newTd = document.createElement('td');
+          newTd.textContent = td.textContent;
+          newTd.style.height = td.getBoundingClientRect().height + 'px';
+          newTd.addEventListener('click', function() { td.click(); });
+          newRow.appendChild(newTd);
+          fixedBody.appendChild(newRow);
+        });
+
+        syncPosition();
       }
-      container.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 2) { pinching = true; lastDist = getDist(e.touches); e.preventDefault(); }
-      }, { passive: false });
-      container.addEventListener('touchmove', function(e) {
-        if (!pinching || e.touches.length !== 2) return;
-        e.preventDefault();
-        const dist = getDist(e.touches);
-        if (!lastDist) { lastDist = dist; return; }
-        const ratio = dist / lastDist;
-        lastDist = dist;
-        if (ratio > 1.04) document.getElementById('zoomInBtn') && document.getElementById('zoomInBtn').click();
-        else if (ratio < 0.96) document.getElementById('zoomOutBtn') && document.getElementById('zoomOutBtn').click();
-      }, { passive: false });
-      container.addEventListener('touchend', function(e) {
-        if (e.touches.length < 2) { pinching = false; lastDist = null; }
-      }, { passive: true });
+
+      // スクロールに合わせてfixedLayerのtopを同期
+      function syncPosition() {
+        if (!fixedLayer) return;
+        fixedLayer.style.top  = mainPane.scrollTop + 'px';
+        fixedLayer.style.left = mainPane.scrollLeft + 'px';
+
+        // zoomWrapperのscaleを取得してfixedLayerにも同じスケールを適用
+        const zoomWrapper = document.getElementById('zoomWrapper');
+        if (zoomWrapper) {
+          const scale = parseFloat(zoomWrapper.dataset.scale || '1');
+          fixedTable.style.transform = 'scale(' + scale + ')';
+          fixedTable.style.transformOrigin = '0 0';
+          fixedTable.style.width  = (100 / scale) + '%';
+        }
+      }
+
+      mainPane.addEventListener('scroll', syncPosition);
+
+      // テーブル構築後に固定レイヤーを更新するためMutationObserverで監視
+      const observer = new MutationObserver(function() {
+        const calTable = document.getElementById('calTable');
+        if (calTable && calTable.style.display !== 'none') {
+          setTimeout(buildFixedLayer, 100);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+
+      // zoomボタンが押されたらfixedLayerも更新
+      ['zoomInBtn','zoomOutBtn'].forEach(function(id) {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', function() {
+          setTimeout(buildFixedLayer, 50);
+        });
+      });
     })();
   </script>
 

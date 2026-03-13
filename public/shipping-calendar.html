@@ -3,7 +3,7 @@
 <head>
   <script src="/js/auth.js"></script>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>発送確認カレンダー</title>
   <link rel="icon" href="data:," />
   <style>
@@ -60,7 +60,7 @@
 
     #mainLayout { display: flex; flex: 1; overflow: hidden; }
 
-    #timelinePane { flex: 1; overflow: auto; border-right: 2px solid #e5e7eb; }
+    #timelinePane { flex: 1; overflow: auto; border-right: 2px solid #e5e7eb; position: relative; }
 
     #checklistPane {
       width: 0;
@@ -138,6 +138,40 @@
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
 
     #zoomWrapper { transform-origin: top left; }
+
+    /* 案件名固定レイヤー */
+    #projectFixedLayer {
+      position: absolute;
+      top: 0; left: 0;
+      z-index: 50;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #projectFixedLayer table {
+      border-collapse: collapse;
+      white-space: nowrap;
+      pointer-events: auto;
+    }
+    #projectFixedLayer td, #projectFixedLayer th {
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+      min-width: 120px;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+    #projectFixedLayer th {
+      font-size: 11px;
+      padding: 4px 6px;
+      text-align: left;
+      padding-left: 8px;
+    }
 
     /* ===== スマホ対応 ===== */
     #hamburgerBtn {
@@ -218,6 +252,12 @@
 
   <div id="mainLayout">
     <div id="timelinePane">
+      <div id="projectFixedLayer">
+        <table id="projectFixedTable">
+          <thead><tr id="projectFixedHead"></tr></thead>
+          <tbody id="projectFixedBody"></tbody>
+        </table>
+      </div>
       <div id="zoomWrapper">
         <div id="loadingMsg">読み込み中...</div>
         <table id="calTable" style="display:none;">
@@ -264,24 +304,10 @@
   function applyZoom() {
     const pct = ZOOM_STEPS[zoomIdx];
     const scale = pct / 100;
-    // スクロール位置を記憶してscale後に補正
-    const pane = zoomWrapper.parentElement;
-    const scrollLeft = pane ? pane.scrollLeft : 0;
-    const scrollTop  = pane ? pane.scrollTop  : 0;
-    const prevScale  = parseFloat(zoomWrapper.dataset.scale || '1');
-
-    zoomWrapper.dataset.scale = scale;
-    zoomWrapper.style.transformOrigin = '0 0';
     zoomWrapper.style.transform = `scale(${scale})`;
-    zoomWrapper.style.width  = `${100 / scale}%`;
+    zoomWrapper.style.width = `${100 / scale}%`;
     zoomWrapper.style.height = `${100 / scale}%`;
     zoomLabel.textContent = `${pct}%`;
-
-    // スクロール位置をscale比率で補正
-    if (pane) {
-      pane.scrollLeft = scrollLeft * (scale / prevScale);
-      pane.scrollTop  = scrollTop  * (scale / prevScale);
-    }
   }
 
   zoomInBtn.addEventListener('click', () => {
@@ -780,33 +806,75 @@
 
 
   <script>
-    // ピンチズーム（カレンダーエリアのみ）
+    // 案件名固定レイヤーの同期（発送カレンダー）
     (function() {
-      const container = document.getElementById('mainPane') || document.getElementById('timelinePane');
-      if (!container) return;
-      let lastDist = null;
-      let pinching = false;
-      function getDist(t) {
-        const dx = t[0].clientX - t[1].clientX;
-        const dy = t[0].clientY - t[1].clientY;
-        return Math.sqrt(dx*dx + dy*dy);
+      const timelinePane  = document.getElementById('timelinePane');
+      const fixedLayer    = document.getElementById('projectFixedLayer');
+      const fixedHead     = document.getElementById('projectFixedHead');
+      const fixedBody     = document.getElementById('projectFixedBody');
+      const fixedTable    = document.getElementById('projectFixedTable');
+      if (!timelinePane || !fixedLayer) return;
+
+      function buildFixedLayer() {
+        const calTable = document.getElementById('calTable');
+        if (!calTable || calTable.style.display === 'none') return;
+
+        const origTh = calTable.querySelector('thead tr th.th-project');
+        if (origTh) {
+          fixedHead.innerHTML = '';
+          const th = document.createElement('th');
+          th.textContent = origTh.textContent;
+          th.style.height = origTh.getBoundingClientRect().height + 'px';
+          fixedHead.appendChild(th);
+        }
+
+        fixedBody.innerHTML = '';
+        const rows = calTable.querySelectorAll('tbody tr');
+        rows.forEach(function(row) {
+          const td = row.querySelector('td.td-project');
+          if (!td) return;
+          const newRow = document.createElement('tr');
+          const newTd = document.createElement('td');
+          newTd.textContent = td.textContent;
+          newTd.style.height = td.getBoundingClientRect().height + 'px';
+          newTd.addEventListener('click', function() { td.click(); });
+          newRow.appendChild(newTd);
+          fixedBody.appendChild(newRow);
+        });
+
+        syncPosition();
       }
-      container.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 2) { pinching = true; lastDist = getDist(e.touches); e.preventDefault(); }
-      }, { passive: false });
-      container.addEventListener('touchmove', function(e) {
-        if (!pinching || e.touches.length !== 2) return;
-        e.preventDefault();
-        const dist = getDist(e.touches);
-        if (!lastDist) { lastDist = dist; return; }
-        const ratio = dist / lastDist;
-        lastDist = dist;
-        if (ratio > 1.04) document.getElementById('zoomInBtn') && document.getElementById('zoomInBtn').click();
-        else if (ratio < 0.96) document.getElementById('zoomOutBtn') && document.getElementById('zoomOutBtn').click();
-      }, { passive: false });
-      container.addEventListener('touchend', function(e) {
-        if (e.touches.length < 2) { pinching = false; lastDist = null; }
-      }, { passive: true });
+
+      function syncPosition() {
+        if (!fixedLayer) return;
+        fixedLayer.style.top  = timelinePane.scrollTop + 'px';
+        fixedLayer.style.left = timelinePane.scrollLeft + 'px';
+
+        const zoomWrapper = document.getElementById('zoomWrapper');
+        if (zoomWrapper) {
+          const scale = parseFloat(zoomWrapper.dataset.scale || '1');
+          fixedTable.style.transform = 'scale(' + scale + ')';
+          fixedTable.style.transformOrigin = '0 0';
+          fixedTable.style.width  = (100 / scale) + '%';
+        }
+      }
+
+      timelinePane.addEventListener('scroll', syncPosition);
+
+      const observer = new MutationObserver(function() {
+        const calTable = document.getElementById('calTable');
+        if (calTable && calTable.style.display !== 'none') {
+          setTimeout(buildFixedLayer, 100);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+
+      ['zoomInBtn','zoomOutBtn'].forEach(function(id) {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', function() {
+          setTimeout(buildFixedLayer, 50);
+        });
+      });
     })();
   </script>
 
