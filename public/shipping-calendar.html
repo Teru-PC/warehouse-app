@@ -3,7 +3,7 @@
 <head>
   <script src="/js/auth.js"></script>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>発送確認カレンダー</title>
   <link rel="icon" href="data:," />
   <style>
@@ -85,16 +85,11 @@
     .cl-item .item-name.checked { text-decoration: line-through; color: #9ca3af; }
     .cl-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; flex-shrink: 0; }
 
-    #calTable { --cell-w: 80px; --cell-fs: 11px; }
-    @media (max-width: 900px) {
-      #calTable { --cell-w: 60px; --cell-fs: 9px; }
-    }
-
     #calTable { border-collapse: collapse; white-space: nowrap; }
 
     #calTable thead th {
       position: sticky; top: 0; background: #fff; z-index: 20;
-      border: 1px solid #e5e7eb; font-size: var(--cell-fs); font-weight: 700;
+      border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700;
       padding: 4px 6px; text-align: center; min-width: 36px;
     }
     #calTable thead th.th-project {
@@ -142,7 +137,7 @@
 
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
 
-    #zoomWrapper { /* zoom controlled by JS */ }
+    #zoomWrapper { transform-origin: top left; }
 
     /* ===== スマホ対応 ===== */
     #hamburgerBtn {
@@ -213,7 +208,7 @@
     <button class="nav-btn" id="prevMonthBtn">◀ 前へ</button>
     <span id="rangeLabel" style="margin:0 8px;font-size:13px;font-weight:600;color:#374151;min-width:180px;text-align:center;"></span>
     <button class="nav-btn" id="nextMonthBtn">次へ ▶</button>
-    <div id="zoomControls" style="display:none;">
+    <div id="zoomControls">
       <button id="zoomOutBtn">－</button>
       <span id="zoomLabel">100%</span>
       <button id="zoomInBtn">＋</button>
@@ -262,16 +257,25 @@
   // 表示開始オフセット（◀▶で±30日移動）
   let offsetDays = 0;
 
-  // ズーム機能無効化（CSS変数でサイズ制御・stickyを維持）
+  // ズーム設定（30%〜100%）
+  const ZOOM_STEPS = [30, 40, 50, 60, 70, 80, 90, 100];
+  let zoomIdx = ZOOM_STEPS.indexOf(100);
+
   function applyZoom() {
-    const calTable = document.getElementById('calTable');
-    if (!calTable) return;
-    const isMobile = window.innerWidth <= 900;
-    calTable.style.setProperty('--cell-w', isMobile ? '60px' : '80px');
-    calTable.style.setProperty('--cell-fs', isMobile ? '9px'  : '11px');
+    const pct = ZOOM_STEPS[zoomIdx];
+    const scale = pct / 100;
+    zoomWrapper.style.transform = `scale(${scale})`;
+    zoomWrapper.style.width = `${100 / scale}%`;
+    zoomWrapper.style.height = `${100 / scale}%`;
+    zoomLabel.textContent = `${pct}%`;
   }
-  if (zoomInBtn)  { zoomInBtn.disabled  = true; }
-  if (zoomOutBtn) { zoomOutBtn.disabled = true;  }
+
+  zoomInBtn.addEventListener('click', () => {
+    if (zoomIdx < ZOOM_STEPS.length - 1) { zoomIdx++; applyZoom(); }
+  });
+  zoomOutBtn.addEventListener('click', () => {
+    if (zoomIdx > 0) { zoomIdx--; applyZoom(); }
+  });
 
   function pad2(n) { return String(n).padStart(2,'0'); }
 
@@ -757,6 +761,19 @@
           if (content) content.style.display = 'none';
         });
       });
+    })();
+  </script>
+
+
+  <script>
+    // ダブルタップズーム無効化
+    (function() {
+      let lastTap = 0;
+      document.addEventListener('touchend', function(e) {
+        const now = Date.now();
+        if (now - lastTap < 300) e.preventDefault();
+        lastTap = now;
+      }, { passive: false });
     })();
   </script>
 
