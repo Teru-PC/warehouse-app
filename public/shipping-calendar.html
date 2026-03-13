@@ -3,7 +3,7 @@
 <head>
   <script src="/js/auth.js"></script>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
   <title>発送確認カレンダー</title>
   <link rel="icon" href="data:," />
   <style>
@@ -761,6 +761,61 @@
           if (content) content.style.display = 'none';
         });
       });
+    })();
+  </script>
+
+
+  <script>
+    // ピンチズーム（カレンダーエリアのみ）
+    (function() {
+      // shipping-calendar: timelinePane / staff-calendar: mainPane
+      const container = document.getElementById('timelinePane') || document.getElementById('mainPane');
+      if (!container) return;
+
+      let lastDist = null;
+      let pinching = false;
+
+      function getDist(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      container.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+          pinching = true;
+          lastDist = getDist(e.touches);
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchmove', function(e) {
+        if (!pinching || e.touches.length !== 2) return;
+        e.preventDefault();
+        const dist = getDist(e.touches);
+        if (lastDist === null) { lastDist = dist; return; }
+
+        const ratio = dist / lastDist;
+        lastDist = dist;
+
+        // 既存のZOOM_STEPSとzoomIdxを操作
+        if (ratio > 1.04) {
+          // ピンチアウト → ズームイン
+          const btn = document.getElementById('zoomInBtn');
+          if (btn) btn.click();
+        } else if (ratio < 0.96) {
+          // ピンチイン → ズームアウト
+          const btn = document.getElementById('zoomOutBtn');
+          if (btn) btn.click();
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchend', function(e) {
+        if (e.touches.length < 2) {
+          pinching = false;
+          lastDist = null;
+        }
+      }, { passive: true });
     })();
   </script>
 
