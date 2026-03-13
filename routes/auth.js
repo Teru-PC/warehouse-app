@@ -18,6 +18,7 @@ async function recordLoginLog(userId, success, ip) {
   }
 }
 
+// ─── ログイン ────────────────────────────────────────────────
 router.post("/api/auth/login", async (req, res) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || null;
   try {
@@ -34,6 +35,12 @@ router.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "メールまたはパスワードが違います" });
     }
     const user = result.rows[0];
+
+    // パスワード未設定（初回ユーザー）
+    if (!user.password_hash) {
+      return res.status(403).json({ error: "first_login", message: "初回パスワードの設定が必要です" });
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       await recordLoginLog(user.id, false, ip);
@@ -55,6 +62,42 @@ router.post("/api/auth/login", async (req, res) => {
   }
 });
 
+// ─── 初回パスワード設定 ──────────────────────────────────────
+router.post("/api/auth/setup-password", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "メールとパスワードを入力してください" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "パスワードは6文字以上で設定してください" });
+    }
+
+    const result = await db.query(
+      "SELECT id, password_hash FROM users WHERE email = $1",
+      [email]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "登録されていないメールアドレスです" });
+    }
+    const user = result.rows[0];
+
+    // すでにパスワードが設定済みの場合は拒否
+    if (user.password_hash) {
+      return res.status(400).json({ error: "このアカウントはすでにパスワードが設定されています" });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    await db.query("UPDATE users SET password_hash = $1 WHERE id = $2", [hash, user.id]);
+
+    res.json({ success: true, message: "パスワードを設定しました。ログインしてください。" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "パスワード設定に失敗しました" });
+  }
+});
+
+// ─── 認証確認 ────────────────────────────────────────────────
 router.get("/api/auth/me", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;

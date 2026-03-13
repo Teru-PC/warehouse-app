@@ -64,6 +64,10 @@
 
     <button id="loginBtn">ログイン</button>
     <p id="errorMsg" class="error"></p>
+
+    <a href="/setup-password.html" style="display:block;text-align:center;margin-top:20px;font-size:13px;color:#6b7280;text-decoration:none;">
+      🔑 初回ログインの方はこちら
+    </a>
   </div>
 
   <script>
@@ -97,6 +101,11 @@
         const data = await res.json();
 
         if (!res.ok) {
+          if (data.error === 'first_login') {
+            errorMsg.textContent = '初回ログインです。パスワード設定画面へ移動します…';
+            setTimeout(() => { location.href = '/setup-password.html'; }, 1500);
+            return;
+          }
           errorMsg.textContent = data.error || 'ログインに失敗しました';
           return;
         }
