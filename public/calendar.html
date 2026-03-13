@@ -386,17 +386,18 @@ async function runImport(token) {
   </script>
 
   <script>
-    // ピンチズーム（カレンダーグリッドエリアのみ）
+    // ピンチズーム（時間列・日付ヘッダー・グリッドを同時スケール）
     (function() {
-      const container = document.getElementById('gridScroll');
-      const target    = document.getElementById('daysGrid');
-      if (!container || !target) return;
+      const gridScroll   = document.getElementById('gridScroll');
+      const timeCol      = document.getElementById('timeCol');
+      const headerScroll = document.getElementById('dateHeaderScroll');
+      if (!gridScroll) return;
 
       let currentScale = 1.0;
       const MIN_SCALE  = 0.3;
       const MAX_SCALE  = 2.0;
-      let lastDist = null;
-      let pinching = false;
+      let lastDist     = null;
+      let pinching     = false;
 
       function getDist(touches) {
         const dx = touches[0].clientX - touches[1].clientX;
@@ -406,12 +407,33 @@ async function runImport(token) {
 
       function applyScale(scale) {
         currentScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
-        target.style.transformOrigin = 'top left';
-        target.style.transform = `scale(${currentScale})`;
-        target.style.width = `${100 / currentScale}%`;
+
+        // グリッド（縦横スケール）
+        const daysGrid = document.getElementById('daysGrid');
+        if (daysGrid) {
+          daysGrid.style.transformOrigin = 'top left';
+          daysGrid.style.transform = `scale(${currentScale})`;
+          daysGrid.style.width  = `${100 / currentScale}%`;
+          daysGrid.style.height = `${100 / currentScale}%`;
+        }
+
+        // 時間列（縦のみスケール）
+        if (timeCol) {
+          timeCol.style.transformOrigin = 'top left';
+          timeCol.style.transform = `scaleY(${currentScale})`;
+          timeCol.style.height = `${100 / currentScale}%`;
+        }
+
+        // 日付ヘッダー（横のみスケール）
+        const daysHeader = document.getElementById('daysHeader');
+        if (daysHeader) {
+          daysHeader.style.transformOrigin = 'top left';
+          daysHeader.style.transform = `scaleX(${currentScale})`;
+          daysHeader.style.width = `${100 / currentScale}%`;
+        }
       }
 
-      container.addEventListener('touchstart', function(e) {
+      gridScroll.addEventListener('touchstart', function(e) {
         if (e.touches.length === 2) {
           pinching = true;
           lastDist = getDist(e.touches);
@@ -419,21 +441,20 @@ async function runImport(token) {
         }
       }, { passive: false });
 
-      container.addEventListener('touchmove', function(e) {
+      gridScroll.addEventListener('touchmove', function(e) {
         if (!pinching || e.touches.length !== 2) return;
         e.preventDefault();
         const dist = getDist(e.touches);
         if (lastDist === null) { lastDist = dist; return; }
-
         const ratio = dist / lastDist;
         lastDist = dist;
         applyScale(currentScale * ratio);
       }, { passive: false });
 
-      container.addEventListener('touchend', function(e) {
+      gridScroll.addEventListener('touchend', function(e) {
         if (e.touches.length < 2) {
-          pinching = false;
-          lastDist = null;
+          pinching  = false;
+          lastDist  = null;
         }
       }, { passive: true });
     })();
