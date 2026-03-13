@@ -264,21 +264,24 @@
   function applyZoom() {
     const pct = ZOOM_STEPS[zoomIdx];
     const scale = pct / 100;
-    const table = document.getElementById('calTable');
-    if (table) {
-      table.style.fontSize = (11 * scale) + 'px';
+    // スクロール位置を記憶してscale後に補正
+    const pane = zoomWrapper.parentElement;
+    const scrollLeft = pane ? pane.scrollLeft : 0;
+    const scrollTop  = pane ? pane.scrollTop  : 0;
+    const prevScale  = parseFloat(zoomWrapper.dataset.scale || '1');
+
+    zoomWrapper.dataset.scale = scale;
+    zoomWrapper.style.transformOrigin = '0 0';
+    zoomWrapper.style.transform = `scale(${scale})`;
+    zoomWrapper.style.width  = `${100 / scale}%`;
+    zoomWrapper.style.height = `${100 / scale}%`;
+    zoomLabel.textContent = `${pct}%`;
+
+    // スクロール位置をscale比率で補正
+    if (pane) {
+      pane.scrollLeft = scrollLeft * (scale / prevScale);
+      pane.scrollTop  = scrollTop  * (scale / prevScale);
     }
-    document.querySelectorAll('#calTable thead th:not(.th-project), #calTable tbody td:not(.td-project)').forEach(function(el) {
-      el.style.minWidth = (80 * scale) + 'px';
-      el.style.padding = (4 * scale) + 'px ' + (6 * scale) + 'px';
-    });
-    document.querySelectorAll('.block').forEach(function(el) {
-      const h = el.dataset.origHeight || el.style.height;
-      if (!el.dataset.origHeight) el.dataset.origHeight = h;
-      el.style.height = (parseFloat(el.dataset.origHeight) * scale) + 'px';
-      el.style.fontSize = (11 * scale) + 'px';
-    });
-    zoomLabel.textContent = pct + '%';
   }
 
   zoomInBtn.addEventListener('click', () => {
@@ -777,7 +780,7 @@
 
 
   <script>
-    // ピンチズーム（案件名列はstickyで固定、カレンダー部分のみスケール）
+    // ピンチズーム（カレンダーエリアのみ）
     (function() {
       const container = document.getElementById('mainPane') || document.getElementById('timelinePane');
       if (!container) return;
