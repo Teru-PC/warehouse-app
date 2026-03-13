@@ -85,11 +85,16 @@
     .cl-item .item-name.checked { text-decoration: line-through; color: #9ca3af; }
     .cl-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; flex-shrink: 0; }
 
+    #calTable { --cell-w: 80px; --cell-fs: 11px; }
+    @media (max-width: 900px) {
+      #calTable { --cell-w: 60px; --cell-fs: 9px; }
+    }
+
     #calTable { border-collapse: collapse; white-space: nowrap; }
 
     #calTable thead th {
       position: sticky; top: 0; background: #fff; z-index: 20;
-      border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700;
+      border: 1px solid #e5e7eb; font-size: var(--cell-fs); font-weight: 700;
       padding: 4px 6px; text-align: center; min-width: 36px;
     }
     #calTable thead th.th-project {
@@ -137,7 +142,7 @@
 
     #loadingMsg { text-align: center; padding: 40px; color: #6b7280; font-size: 14px; }
 
-    #zoomWrapper { transform-origin: top left; }
+    #zoomWrapper { /* zoom controlled by JS */ }
 
     /* ===== スマホ対応 ===== */
     #hamburgerBtn {
@@ -257,23 +262,16 @@
   // 表示開始オフセット（◀▶で±30日移動）
   let offsetDays = 0;
 
-  // ズーム設定（30%〜100%）
-  const ZOOM_STEPS = [30, 40, 50, 60, 70, 80, 90, 100];
-  let zoomIdx = ZOOM_STEPS.indexOf(100);
-
+  // ズーム機能無効化（CSS変数でサイズ制御・stickyを維持）
   function applyZoom() {
-    // PC:100% / スマホ:80% 固定
+    const calTable = document.getElementById('calTable');
+    if (!calTable) return;
     const isMobile = window.innerWidth <= 900;
-    const scale = isMobile ? 0.8 : 1.0;
-    zoomWrapper.style.transformOrigin = '0 0';
-    zoomWrapper.style.transform = `scale(${scale})`;
-    zoomWrapper.style.width  = `${100 / scale}%`;
-    zoomWrapper.style.height = `${100 / scale}%`;
-    if (zoomLabel) zoomLabel.textContent = isMobile ? '80%' : '100%';
+    calTable.style.setProperty('--cell-w', isMobile ? '60px' : '80px');
+    calTable.style.setProperty('--cell-fs', isMobile ? '9px'  : '11px');
   }
-  // ズームボタンは無効化
-  if (zoomInBtn)  zoomInBtn.disabled  = true;
-  if (zoomOutBtn) zoomOutBtn.disabled = true;
+  if (zoomInBtn)  { zoomInBtn.disabled  = true; }
+  if (zoomOutBtn) { zoomOutBtn.disabled = true;  }
 
   function pad2(n) { return String(n).padStart(2,'0'); }
 
@@ -727,6 +725,37 @@
       if (mzOut) mzOut.addEventListener('click', () => {
         document.getElementById('zoomOutBtn') && document.getElementById('zoomOutBtn').click();
         if (mzLabel) mzLabel.textContent = document.getElementById('zoomLabel').textContent;
+      });
+    })();
+  </script>
+
+  <script>
+    // 右タブ スワイプで閉じる（スマホ対応）
+    (function() {
+      function addSwipeToClose(paneId, closeClass) {
+        const pane = document.getElementById(paneId);
+        if (!pane) return;
+        let startX = 0, startY = 0;
+        pane.addEventListener('touchstart', function(e) {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        }, { passive: true });
+        pane.addEventListener('touchend', function(e) {
+          const dx = e.changedTouches[0].clientX - startX;
+          const dy = Math.abs(e.changedTouches[0].clientY - startY);
+          // 右方向に50px以上スワイプ、縦ズレ30px以内
+          if (dx > 50 && dy < 30) {
+            pane.classList.remove('open');
+            if (closeClass) closeClass();
+          }
+        }, { passive: true });
+      }
+      // DOMロード後に実行
+      document.addEventListener('DOMContentLoaded', function() {
+        addSwipeToClose('checklistPane', function() {
+          const content = document.getElementById('checklistContent');
+          if (content) content.style.display = 'none';
+        });
       });
     })();
   </script>
