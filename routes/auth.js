@@ -6,7 +6,20 @@ const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "warehouse_secret_key";
 
+// ログイン履歴を記録するヘルパー
+async function recordLoginLog(userId, success, ip) {
+  try {
+    await db.query(
+      "INSERT INTO login_logs (user_id, success, ip_address) VALUES ($1, $2, $3)",
+      [userId || null, success, ip || null]
+    );
+  } catch (e) {
+    console.error("login_log error:", e);
+  }
+}
+
 router.post("/api/auth/login", async (req, res) => {
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || null;
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -17,13 +30,16 @@ router.post("/api/auth/login", async (req, res) => {
       [email]
     );
     if (result.rows.length === 0) {
+      await recordLoginLog(null, false, ip);
       return res.status(401).json({ error: "メールまたはパスワードが違います" });
     }
     const user = result.rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      await recordLoginLog(user.id, false, ip);
       return res.status(401).json({ error: "メールまたはパスワードが違います" });
     }
+    await recordLoginLog(user.id, true, ip);
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET,

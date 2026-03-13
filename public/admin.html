@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>管理画面</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f3f4f6; min-height: 100vh; }
+
+    /* ヘッダー */
+    #header {
+      background: #1e293b; color: #fff;
+      padding: 12px 20px; display: flex; align-items: center; gap: 16px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    #header h1 { font-size: 16px; font-weight: 700; flex: 1; }
+    #header .back-btn {
+      background: #334155; color: #fff; border: none; border-radius: 6px;
+      padding: 6px 14px; cursor: pointer; font-size: 13px;
+    }
+    #header .back-btn:hover { background: #475569; }
+    #logoutBtn {
+      background: #ef4444; color: #fff; border: none; border-radius: 6px;
+      padding: 6px 14px; cursor: pointer; font-size: 13px;
+    }
+
+    /* タブ */
+    #tabs {
+      display: flex; background: #fff; border-bottom: 2px solid #e5e7eb;
+      padding: 0 20px; gap: 4px; overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 12px 20px; border: none; background: none; cursor: pointer;
+      font-size: 14px; color: #6b7280; border-bottom: 3px solid transparent;
+      white-space: nowrap; margin-bottom: -2px;
+    }
+    .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+    .tab-btn:hover { background: #f9fafb; }
+
+    /* コンテンツ */
+    #content { padding: 24px 20px; max-width: 1000px; margin: 0 auto; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* カード */
+    .card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px;
+    }
+    .card h2 { font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
+
+    /* フォーム */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 12px; color: #6b7280; font-weight: 600; }
+    .form-group input, .form-group select {
+      border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px;
+      font-size: 14px; outline: none;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: #2563eb; }
+    .btn-primary {
+      background: #2563eb; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 600;
+      margin-top: 12px;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+
+    /* テーブル */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: #f8fafc; padding: 10px 12px; text-align: left;
+      font-weight: 600; color: #374151; border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 10px 12px; border-bottom: 1px solid #f1f5f9;
+      color: #374151; white-space: nowrap;
+    }
+    tbody tr:hover { background: #f8fafc; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-admin { background: #fef3c7; color: #92400e; }
+    .badge-user  { background: #e0f2fe; color: #0369a1; }
+    .badge-ok    { background: #dcfce7; color: #166534; }
+    .badge-fail  { background: #fee2e2; color: #991b1b; }
+    .btn-danger {
+      background: #fee2e2; color: #ef4444; border: none; border-radius: 6px;
+      padding: 4px 10px; cursor: pointer; font-size: 12px;
+    }
+    .btn-danger:hover { background: #fca5a5; }
+
+    /* メッセージ */
+    #msg {
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;
+      font-size: 13px; display: none;
+    }
+    #msg.success { background: #dcfce7; color: #166534; display: block; }
+    #msg.error   { background: #fee2e2; color: #991b1b; display: block; }
+
+    /* 空表示 */
+    .empty { text-align: center; color: #9ca3af; padding: 32px; font-size: 14px; }
+
+    /* 検索 */
+    .search-bar {
+      display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .search-bar input {
+      border: 1px solid #d1d5db; border-radius: 6px; padding: 7px 10px;
+      font-size: 13px; flex: 1; min-width: 160px; outline: none;
+    }
+    .search-bar input:focus { border-color: #2563eb; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <button class="back-btn" onclick="location.href='/index.html'">← 戻る</button>
+  <h1>⚙️ 管理画面</h1>
+  <button id="logoutBtn">ログアウト</button>
+</div>
+
+<div id="tabs">
+  <button class="tab-btn active" onclick="switchTab('users')">👥 ユーザー管理</button>
+  <button class="tab-btn" onclick="switchTab('loginLogs')">🔑 ログイン履歴</button>
+  <button class="tab-btn" onclick="switchTab('changeLogs')">📝 変更履歴</button>
+</div>
+
+<div id="content">
+  <div id="msg"></div>
+
+  <!-- ユーザー管理 -->
+  <div id="section-users" class="section active">
+    <div class="card">
+      <h2>➕ ユーザー追加</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>名前 *</label>
+          <input type="text" id="newName" placeholder="山田 太郎" />
+        </div>
+        <div class="form-group">
+          <label>メールアドレス *</label>
+          <input type="email" id="newEmail" placeholder="example@email.com" />
+        </div>
+        <div class="form-group">
+          <label>パスワード *</label>
+          <input type="password" id="newPassword" placeholder="8文字以上推奨" />
+        </div>
+        <div class="form-group">
+          <label>ロール</label>
+          <select id="newRole">
+            <option value="user">一般ユーザー</option>
+            <option value="admin">管理者</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="addUser()">追加する</button>
+    </div>
+
+    <div class="card">
+      <h2>👥 ユーザー一覧</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>メールアドレス</th>
+              <th>ロール</th>
+              <th>登録日</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody">
+            <tr><td colspan="5" class="empty">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ログイン履歴 -->
+  <div id="section-loginLogs" class="section">
+    <div class="card">
+      <h2>🔑 ログイン履歴（直近200件）</h2>
+      <div class="search-bar">
+        <input type="text" id="loginSearch" placeholder="名前・メールで絞り込み" oninput="filterLoginLogs()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日時</th>
+              <th>名前</th>
+              <th>メールアドレス</th>
+              <th>結果</th>
+              <th>IPアドレス</th>
+            </tr>
+          </thead>
+          <tbody id="loginLogBody">
+            <tr><td colspan="5" class="empty">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 変更履歴 -->
+  <div id="section-changeLogs" class="section">
+    <div class="card">
+      <h2>📝 変更履歴（直近500件）</h2>
+      <div class="search-bar">
+        <input type="text" id="changeSearch" placeholder="名前・内容で絞り込み" oninput="filterChangeLogs()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日時</th>
+              <th>操作者</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody id="changeLogBody">
+            <tr><td colspan="3" class="empty">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+  const token = () => localStorage.getItem('token') || '';
+
+  // 管理者チェック
+  (function() {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!user || user.role !== 'admin') {
+      alert('管理者のみアクセスできます');
+      location.href = '/index.html';
+    }
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    authUtils.logout();
+  });
+
+  // タブ切り替え
+  function switchTab(tab) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('section-' + tab).classList.add('active');
+    event.target.classList.add('active');
+
+    if (tab === 'loginLogs') loadLoginLogs();
+    if (tab === 'changeLogs') loadChangeLogs();
+  }
+
+  // メッセージ表示
+  function showMsg(text, type) {
+    const el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = type;
+    setTimeout(() => { el.className = ''; el.textContent = ''; }, 4000);
+  }
+
+  // 日時フォーマット
+  function fmtDate(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('ja-JP') + ' ' + d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ─── ユーザー管理 ───────────────────────────────────────
+  async function loadUsers() {
+    const res  = await fetch('/api/admin/users', { headers: { Authorization: 'Bearer ' + token() } });
+    const data = await res.json();
+    const tbody = document.getElementById('userTableBody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">ユーザーがいません</td></tr>'; return; }
+    const me = JSON.parse(localStorage.getItem('user') || 'null');
+    tbody.innerHTML = data.map(u => `
+      <tr>
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td><span class="badge badge-${u.role}">${u.role === 'admin' ? '管理者' : '一般'}</span></td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td>${me && me.id !== u.id ? `<button class="btn-danger" onclick="deleteUser(${u.id}, '${u.name}')">削除</button>` : ''}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function addUser() {
+    const name     = document.getElementById('newName').value.trim();
+    const email    = document.getElementById('newEmail').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const role     = document.getElementById('newRole').value;
+    if (!name || !email || !password) { showMsg('名前・メール・パスワードを入力してください', 'error'); return; }
+    const res  = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
+      body: JSON.stringify({ name, email, password, role })
+    });
+    const data = await res.json();
+    if (!res.ok) { showMsg(data.error || 'エラーが発生しました', 'error'); return; }
+    showMsg(`${name} さんを追加しました`, 'success');
+    document.getElementById('newName').value = '';
+    document.getElementById('newEmail').value = '';
+    document.getElementById('newPassword').value = '';
+    loadUsers();
+  }
+
+  async function deleteUser(id, name) {
+    if (!confirm(`「${name}」を削除してよろしいですか？`)) return;
+    const res  = await fetch('/api/admin/users/' + id, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token() }
+    });
+    const data = await res.json();
+    if (!res.ok) { showMsg(data.error || 'エラーが発生しました', 'error'); return; }
+    showMsg(`${name} を削除しました`, 'success');
+    loadUsers();
+  }
+
+  // ─── ログイン履歴 ───────────────────────────────────────
+  let loginLogsData = [];
+  async function loadLoginLogs() {
+    const res  = await fetch('/api/admin/login-logs', { headers: { Authorization: 'Bearer ' + token() } });
+    loginLogsData = await res.json();
+    renderLoginLogs(loginLogsData);
+  }
+
+  function renderLoginLogs(data) {
+    const tbody = document.getElementById('loginLogBody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">履歴がありません</td></tr>'; return; }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td>${fmtDate(r.logged_in_at)}</td>
+        <td>${r.name || '不明'}</td>
+        <td>${r.email || '-'}</td>
+        <td><span class="badge badge-${r.success ? 'ok' : 'fail'}">${r.success ? '成功' : '失敗'}</span></td>
+        <td>${r.ip_address || '-'}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterLoginLogs() {
+    const q = document.getElementById('loginSearch').value.toLowerCase();
+    renderLoginLogs(loginLogsData.filter(r =>
+      (r.name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)
+    ));
+  }
+
+  // ─── 変更履歴 ───────────────────────────────────────────
+  let changeLogsData = [];
+  async function loadChangeLogs() {
+    const res  = await fetch('/api/admin/change-logs', { headers: { Authorization: 'Bearer ' + token() } });
+    changeLogsData = await res.json();
+    renderChangeLogs(changeLogsData);
+  }
+
+  function renderChangeLogs(data) {
+    const tbody = document.getElementById('changeLogBody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="3" class="empty">履歴がありません</td></tr>'; return; }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td>${fmtDate(r.changed_at)}</td>
+        <td>${r.name || '不明'}</td>
+        <td>${r.detail}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterChangeLogs() {
+    const q = document.getElementById('changeSearch').value.toLowerCase();
+    renderChangeLogs(changeLogsData.filter(r =>
+      (r.name || '').toLowerCase().includes(q) || (r.detail || '').toLowerCase().includes(q)
+    ));
+  }
+
+  // 初期ロード
+  loadUsers();
+</script>
+</body>
+</html>

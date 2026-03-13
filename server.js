@@ -54,6 +54,7 @@ const equipmentRoutes   = asRouter(require("./routes/equipment"));
 const projectItemRoutes = asRouter(require("./routes/project_items"));
 const shortageRoutes    = asRouter(require("./routes/shortages"));
 const googleCalendarRoutes = require("./routes/google_calendar");
+const adminRoutes       = require("./routes/admin");
 
 mustBeRouter("authRoutes", authRoutes);
 mustBeRouter("projectRoutes", projectRoutes);
@@ -68,6 +69,7 @@ app.use("/api/equipment", equipmentRoutes);
 app.use("/api/upload", asRouter(require("./routes/upload")));
 app.use("/api", googleCalendarRoutes);
 app.use("/", googleCalendarRoutes);
+app.use("/", adminRoutes);
 app.use("/api", projectItemRoutes);
 app.use("/api", shortageRoutes);
 
