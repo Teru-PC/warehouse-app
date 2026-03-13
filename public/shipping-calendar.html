@@ -264,10 +264,21 @@
   function applyZoom() {
     const pct = ZOOM_STEPS[zoomIdx];
     const scale = pct / 100;
-    zoomWrapper.style.transform = `scale(${scale})`;
-    zoomWrapper.style.width = `${100 / scale}%`;
-    zoomWrapper.style.height = `${100 / scale}%`;
-    zoomLabel.textContent = `${pct}%`;
+    const table = document.getElementById('calTable');
+    if (table) {
+      table.style.fontSize = (11 * scale) + 'px';
+    }
+    document.querySelectorAll('#calTable thead th:not(.th-project), #calTable tbody td:not(.td-project)').forEach(function(el) {
+      el.style.minWidth = (80 * scale) + 'px';
+      el.style.padding = (4 * scale) + 'px ' + (6 * scale) + 'px';
+    });
+    document.querySelectorAll('.block').forEach(function(el) {
+      const h = el.dataset.origHeight || el.style.height;
+      if (!el.dataset.origHeight) el.dataset.origHeight = h;
+      el.style.height = (parseFloat(el.dataset.origHeight) * scale) + 'px';
+      el.style.fontSize = (11 * scale) + 'px';
+    });
+    zoomLabel.textContent = pct + '%';
   }
 
   zoomInBtn.addEventListener('click', () => {
@@ -766,55 +777,32 @@
 
 
   <script>
-    // ピンチズーム（カレンダーエリアのみ）
+    // ピンチズーム（案件名列はstickyで固定、カレンダー部分のみスケール）
     (function() {
-      // shipping-calendar: timelinePane / staff-calendar: mainPane
-      const container = document.getElementById('timelinePane') || document.getElementById('mainPane');
+      const container = document.getElementById('mainPane') || document.getElementById('timelinePane');
       if (!container) return;
-
       let lastDist = null;
       let pinching = false;
-
-      function getDist(touches) {
-        const dx = touches[0].clientX - touches[1].clientX;
-        const dy = touches[0].clientY - touches[1].clientY;
-        return Math.sqrt(dx * dx + dy * dy);
+      function getDist(t) {
+        const dx = t[0].clientX - t[1].clientX;
+        const dy = t[0].clientY - t[1].clientY;
+        return Math.sqrt(dx*dx + dy*dy);
       }
-
       container.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 2) {
-          pinching = true;
-          lastDist = getDist(e.touches);
-          e.preventDefault();
-        }
+        if (e.touches.length === 2) { pinching = true; lastDist = getDist(e.touches); e.preventDefault(); }
       }, { passive: false });
-
       container.addEventListener('touchmove', function(e) {
         if (!pinching || e.touches.length !== 2) return;
         e.preventDefault();
         const dist = getDist(e.touches);
-        if (lastDist === null) { lastDist = dist; return; }
-
+        if (!lastDist) { lastDist = dist; return; }
         const ratio = dist / lastDist;
         lastDist = dist;
-
-        // 既存のZOOM_STEPSとzoomIdxを操作
-        if (ratio > 1.04) {
-          // ピンチアウト → ズームイン
-          const btn = document.getElementById('zoomInBtn');
-          if (btn) btn.click();
-        } else if (ratio < 0.96) {
-          // ピンチイン → ズームアウト
-          const btn = document.getElementById('zoomOutBtn');
-          if (btn) btn.click();
-        }
+        if (ratio > 1.04) document.getElementById('zoomInBtn') && document.getElementById('zoomInBtn').click();
+        else if (ratio < 0.96) document.getElementById('zoomOutBtn') && document.getElementById('zoomOutBtn').click();
       }, { passive: false });
-
       container.addEventListener('touchend', function(e) {
-        if (e.touches.length < 2) {
-          pinching = false;
-          lastDist = null;
-        }
+        if (e.touches.length < 2) { pinching = false; lastDist = null; }
       }, { passive: true });
     })();
   </script>
