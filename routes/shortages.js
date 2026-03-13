@@ -4,9 +4,9 @@ const auth    = require("../middleware/auth");
 const router  = express.Router();
 
 /**
- * 期間の計算ロジック
- * - shipping_date(発送日)とreturn_due_date(返却日)が両方ある → その期間でカウント
- * - どちらかが欠けている → usage_start ～ usage_end でカウント
+ * 期間の決定ルール：
+ * - shipping_date と return_due_date が両方ある → その期間でカウント
+ * - どちらかNULL → usage_start ～ usage_end でカウント
  * - ステータスは無視（全案件対象）
  */
 
@@ -22,7 +22,6 @@ router.get("/shortages", auth, async (req, res) => {
 
     if (!projectId) return res.status(400).json({ message: "project_id is required" });
 
-    // 対象案件を取得
     const proj = await pool.query(
       `SELECT id, shipping_date, return_due_date, usage_start, usage_end
        FROM projects WHERE id = $1`,
@@ -31,14 +30,9 @@ router.get("/shortages", auth, async (req, res) => {
     if (!proj.rows.length) return res.status(404).json({ message: "Project not found" });
 
     const p = proj.rows[0];
-
-    // 期間決定：発送日・返却日が両方あれば優先、なければusage期間
-    const rangeStart = (p.shipping_date && p.return_due_date)
-      ? p.shipping_date
-      : p.usage_start;
-    const rangeEnd = (p.shipping_date && p.return_due_date)
-      ? p.return_due_date
-      : p.usage_end;
+    const useShipping = p.shipping_date && p.return_due_date;
+    const rangeStart  = useShipping ? p.shipping_date : p.usage_start;
+    const rangeEnd    = useShipping ? p.return_due_date : p.usage_end;
 
     if (!rangeStart || !rangeEnd) {
       return res.status(400).json({ message: "期間が設定されていません" });
@@ -47,8 +41,7 @@ router.get("/shortages", auth, async (req, res) => {
     const result = await pool.query(`
       WITH req AS (
         SELECT equipment_id, SUM(quantity)::int AS required
-        FROM project_items
-        WHERE project_id = $1
+        FROM project_items WHERE project_id = $1
         GROUP BY equipment_id
       ),
       used AS (
@@ -59,10 +52,12 @@ router.get("/shortages", auth, async (req, res) => {
           AND (
             CASE
               WHEN p.shipping_date IS NOT NULL AND p.return_due_date IS NOT NULL
-                THEN p.shipping_date < $3::date AND p.return_due_date > $2::date
+                THEN p.shipping_date::timestamptz < $3::timestamptz
+                 AND p.return_due_date::timestamptz > $2::timestamptz
               ELSE
                 p.usage_start IS NOT NULL AND p.usage_end IS NOT NULL
-                AND p.usage_start < $3::timestamptz AND p.usage_end > $2::timestamptz
+                AND p.usage_start < $3::timestamptz
+                AND p.usage_end   > $2::timestamptz
             END
           )
         GROUP BY pi.equipment_id
@@ -89,36 +84,40 @@ router.get("/shortages", auth, async (req, res) => {
   }
 });
 
-/**
- * 範囲指定モード：カレンダー表示期間内の全案件を一括チェック
- * GET /api/shortages?from=...&to=...
- * → { projects: [{ project_id, shortage }] }
- */
+// ─── 範囲指定モード（カレンダー表示期間内の全案件を一括チェック）───
 async function handleRangeShortage(req, res) {
   try {
-    const { from, to } = req.query;
+    const from = req.query.from; // YYYY-MM-DD
+    const to   = req.query.to;   // YYYY-MM-DD
 
-    // 表示期間内にある全案件を取得（ステータス無視）
+    // fromの開始(00:00 JST = 前日15:00 UTC)、toの終了(翌日00:00 JST = 当日15:00 UTC)
+    const fromTs = `${from}T00:00:00+09:00`;
+    const toTs   = `${to}T23:59:59+09:00`;
+
+    // 表示期間内にある全案件を取得
     const projResult = await pool.query(`
       SELECT id, shipping_date, return_due_date, usage_start, usage_end
       FROM projects
       WHERE NOT (COALESCE(hidden_shipping, false) = true AND COALESCE(hidden_interpreter, false) = true)
         AND (
           (shipping_date IS NOT NULL AND return_due_date IS NOT NULL
-            AND shipping_date < $2::date AND return_due_date > $1::date)
+            AND shipping_date::timestamptz <= $2::timestamptz
+            AND return_due_date::timestamptz >= $1::timestamptz)
           OR
           (usage_start IS NOT NULL AND usage_end IS NOT NULL
-            AND usage_start < $2::timestamptz AND usage_end > $1::timestamptz)
+            AND usage_start <= $2::timestamptz
+            AND usage_end   >= $1::timestamptz)
         )
-    `, [from, to]);
+    `, [fromTs, toTs]);
 
     const projects = projResult.rows;
     if (!projects.length) return res.json({ projects: [] });
 
     // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
-      const rangeStart = (p.shipping_date && p.return_due_date) ? p.shipping_date : p.usage_start;
-      const rangeEnd   = (p.shipping_date && p.return_due_date) ? p.return_due_date : p.usage_end;
+      const useShipping = p.shipping_date && p.return_due_date;
+      const rangeStart  = useShipping ? `${p.shipping_date}T00:00:00+09:00` : p.usage_start;
+      const rangeEnd    = useShipping ? `${p.return_due_date}T23:59:59+09:00` : p.usage_end;
 
       const r = await pool.query(`
         WITH req AS (
@@ -134,10 +133,12 @@ async function handleRangeShortage(req, res) {
             AND (
               CASE
                 WHEN p.shipping_date IS NOT NULL AND p.return_due_date IS NOT NULL
-                  THEN p.shipping_date < $3 AND p.return_due_date > $2
+                  THEN p.shipping_date::timestamptz < $3::timestamptz
+                   AND p.return_due_date::timestamptz > $2::timestamptz
                 ELSE
                   p.usage_start IS NOT NULL AND p.usage_end IS NOT NULL
-                  AND p.usage_start < $3 AND p.usage_end > $2
+                  AND p.usage_start < $3::timestamptz
+                  AND p.usage_end   > $2::timestamptz
               END
             )
           GROUP BY pi.equipment_id
