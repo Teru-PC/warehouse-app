@@ -3,7 +3,7 @@
 <head>
   <script src="/js/auth.js"></script>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>発送確認カレンダー</title>
   <link rel="icon" href="data:," />
   <style>
@@ -208,7 +208,7 @@
     <button class="nav-btn" id="prevMonthBtn">◀ 前へ</button>
     <span id="rangeLabel" style="margin:0 8px;font-size:13px;font-weight:600;color:#374151;min-width:180px;text-align:center;"></span>
     <button class="nav-btn" id="nextMonthBtn">次へ ▶</button>
-    <div id="zoomControls" style="display:none;">
+    <div id="zoomControls">
       <button id="zoomOutBtn">－</button>
       <span id="zoomLabel">100%</span>
       <button id="zoomInBtn">＋</button>
@@ -262,16 +262,20 @@
   let zoomIdx = ZOOM_STEPS.indexOf(100);
 
   function applyZoom() {
-    // calTableにzoomをかける（stickyを維持するため）
-    // PC:100% / スマホ:80% 固定
-    const isMobile = window.innerWidth <= 900;
-    const scale = isMobile ? 0.8 : 1.0;
-    const tbl = document.getElementById('calTable');
-    if (tbl) tbl.style.zoom = scale;
-    if (zoomLabel) zoomLabel.textContent = isMobile ? '80%' : '100%';
+    const pct = ZOOM_STEPS[zoomIdx];
+    const scale = pct / 100;
+    zoomWrapper.style.transform = `scale(${scale})`;
+    zoomWrapper.style.width = `${100 / scale}%`;
+    zoomWrapper.style.height = `${100 / scale}%`;
+    zoomLabel.textContent = `${pct}%`;
   }
-  if (zoomInBtn)  zoomInBtn.disabled = true;
-  if (zoomOutBtn) zoomOutBtn.disabled = true;
+
+  zoomInBtn.addEventListener('click', () => {
+    if (zoomIdx < ZOOM_STEPS.length - 1) { zoomIdx++; applyZoom(); }
+  });
+  zoomOutBtn.addEventListener('click', () => {
+    if (zoomIdx > 0) { zoomIdx--; applyZoom(); }
+  });
 
   function pad2(n) { return String(n).padStart(2,'0'); }
 
@@ -363,7 +367,7 @@
     });
   }
 
-  function buildTable(projects, days) {
+  function buildTable(projects, days, shortageMap = new Map()) {
     const today  = todayJst();
     const daySet = new Set(days);
     const dayIdx = Object.fromEntries(days.map((d, i) => [d, i]));
@@ -440,6 +444,7 @@
       const row = document.createElement('tr');
       const tdP = document.createElement('td');
       tdP.className = 'td-project';
+      tdP.dataset.projectId = p.id;
       tdP.textContent = p.title || '(無題)';
       tdP.title = p.title || '';
       tdP.addEventListener('click', () => openChecklist(p));
@@ -643,6 +648,21 @@
     }
   }
 
+  // 不足チェック（範囲内の全案件）
+  async function fetchShortages(days) {
+    try {
+      const from = days[0];
+      const to   = days[days.length - 1];
+      const res  = await fetch(`/api/shortages?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')||''}` } });
+      if (!res.ok) return new Map();
+      const json = await res.json();
+      const map  = new Map();
+      for (const s of (json.projects || [])) map.set(s.project_id, s.shortage);
+      return map;
+    } catch { return new Map(); }
+  }
+
   async function render() {
     errorText.textContent = '';
     loadingMsg.style.display = 'block';
@@ -650,8 +670,8 @@
     try {
       const days     = getDaysInRange();
       updateRangeLabel(days);
-      const projects = await fetchProjects();
-      buildTable(projects, days);
+      const [projects, shortageMap] = await Promise.all([fetchProjects(), fetchShortages(days)]);
+      buildTable(projects, days, shortageMap);
       loadingMsg.style.display = 'none';
       calTable.style.display = '';
       const todayCol = calHead.querySelector('th.is-today');
@@ -757,19 +777,6 @@
           if (content) content.style.display = 'none';
         });
       });
-    })();
-  </script>
-
-
-  <script>
-    // ダブルタップズーム無効化
-    (function() {
-      let lastTap = 0;
-      document.addEventListener('touchend', function(e) {
-        const now = Date.now();
-        if (now - lastTap < 300) e.preventDefault();
-        lastTap = now;
-      }, { passive: false });
     })();
   </script>
 

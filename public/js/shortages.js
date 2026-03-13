@@ -62,7 +62,12 @@ function renderResult(rows) {
     return;
   }
 
-  const html = `
+  const hasShortage = rows.some(r => r.shortage);
+  const summary = hasShortage
+    ? `<div style="background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#991b1b;font-weight:700;">⚠️ 在庫が不足している機材があります</div>`
+    : `<div style="background:#dcfce7;border:2px solid #16a34a;border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#166534;font-weight:700;">✅ 在庫は足りています</div>`;
+
+  const html = summary + `
   <table>
     <thead>
       <tr>
@@ -71,7 +76,8 @@ function renderResult(rows) {
         <th>総在庫</th>
         <th>使用中</th>
         <th>利用可能</th>
-        <th>不足</th>
+        <th>状態</th>
+        <th>不足数</th>
       </tr>
     </thead>
     <tbody>
@@ -82,7 +88,8 @@ function renderResult(rows) {
           <td>${r.total}</td>
           <td>${r.used}</td>
           <td>${r.available}</td>
-          <td>${r.shortage ? "不足" : "OK"}</td>
+          <td>${r.shortage ? "⚠️ 不足" : "✅ OK"}</td>
+          <td>${r.shortage ? r.shortage_amount : "-"}</td>
         </tr>
       `).join("")}
     </tbody>

@@ -232,10 +232,11 @@
 
   async function fetchShortages(days) {
     try {
-      const from = new Date(jstMidnightUtcMs(days[0])).toISOString();
-      const to = new Date(jstMidnightUtcMs(days[days.length - 1]) + 86400000).toISOString();
+      const from = days[0];
+      const to   = days[days.length - 1];
+      const token = localStorage.getItem('token') || '';
       const res = await fetch(`/api/shortages?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-        { headers: { Accept: "application/json" } });
+        { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
       if (!res.ok) return new Map();
       const json = await res.json();
       const map = new Map();
