@@ -58,7 +58,7 @@ router.get("/projects/interpreter", auth, async (req, res) => {
         p.usage_end   AS usage_end_at,
         COALESCE(
           json_agg(
-            json_build_object('name', pi.name, 'status', pi.status)
+            json_build_object('name', pi.name, 'status', pi.status, 'cxl_label', pi.cxl_label)
           ) FILTER (WHERE pi.id IS NOT NULL),
           '[]'
         ) AS interpreters
