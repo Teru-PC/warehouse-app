@@ -230,10 +230,10 @@
 
   <div id="navBar">
     <button id="hamburgerBtn">☰</button>
-    <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
-    <button class="nav-btn" onclick="location.href='/shipping-calendar.html'">📦 発送確認</button>
     <span style="font-size:13px;font-weight:700;">👤 通訳カレンダー</span>
     <div style="flex:1;"></div>
+    <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
+    <button class="nav-btn" onclick="location.href='/shipping-calendar.html'">📦 発送確認</button>
     <span id="sortBadge" onclick="clearSort()">📅 ソート中 ✕</span>
     <button class="nav-btn" id="prevBtn">◀ 前へ</button>
     <span id="rangeLabel"></span>
@@ -364,10 +364,9 @@
       const re = new RegExp(kw + '[：:]([^\n\r]+)', 'g');
       let m;
       while ((m = re.exec(memo)) !== null) {
-        // 「、」「,」「，」「　」「 」で分割
-        const parts = m[1].split(/[、,，　\s]+/);
+        // 「、」「,」「，」「　」「 」「　」で分割（スペース区切り複数名対応）
+        const parts = m[1].split(/[、,，　\s　]+/);
         for (const part of parts) {
-          // 「さん」を除去、→以降を除去、（）内を除去、前後の空白を除去
           const name = part
             .replace(/さん/g, '')
             .replace(/→.*/g, '')
@@ -375,7 +374,6 @@
             .replace(/\([^)]*\)/g, '')
             .replace(/[　\s]/g, '')
             .trim();
-          // 数字始まり、英数字のみ、「名」で終わるものは除外
           if (name.length > 0
             && !/^\d/.test(name)
             && !/^[a-zA-Z0-9]+$/.test(name)

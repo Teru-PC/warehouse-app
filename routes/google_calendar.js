@@ -71,9 +71,14 @@ function extractInterpreters(memo) {
       .trim();
   }
 
+  // 「、」「,」「，」「　」「 」で分割して複数名を抽出
   function extractNames(line) {
-    const parts = line.split(/[、,，]+/);
-    return parts.map(p => cleanName(p)).filter(n => n.length > 0);
+    const parts = line.split(/[、,，　\s]+/);
+    return parts.map(p => cleanName(p)).filter(n =>
+      n.length > 0 &&
+      !/^\d/.test(n) &&
+      !/名$/.test(n)
+    );
   }
 
   const active = [];
