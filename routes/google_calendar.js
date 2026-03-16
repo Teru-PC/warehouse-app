@@ -183,16 +183,23 @@ async function importFromGoogle() {
     const threeMonthsLater = new Date();
     threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
 
-    const response = await calendar.events.list({
-      calendarId: "primary",
-      timeMin: now.toISOString(),
-      timeMax: threeMonthsLater.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 2500
-    });
-
-    const events = response.data.items || [];
+    // ページネーション対応：全件取得
+    const events = [];
+    let pageToken = undefined;
+    do {
+      const response = await calendar.events.list({
+        calendarId: "primary",
+        timeMin: now.toISOString(),
+        timeMax: threeMonthsLater.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 2500,
+        pageToken: pageToken
+      });
+      (response.data.items || []).forEach(e => events.push(e));
+      pageToken = response.data.nextPageToken;
+    } while (pageToken);
+    console.log(`Google Calendar: ${events.length} events fetched`);
     const activeEventIds = new Set(events.map(e => e.id));
 
     let importedCount = 0, updatedCount = 0, deletedCount = 0;
