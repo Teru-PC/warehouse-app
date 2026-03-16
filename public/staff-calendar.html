@@ -435,9 +435,18 @@
       const projectCxl = p.is_cancelled === true;
 
       if (interps.length > 0) {
+        // CXL優先：同名でactive/cxlが両方ある場合はcxlを使う
+        const interpMap = new Map();
         for (const interp of interps) {
           const name = interp.name;
           if (!name) continue;
+          const existing = interpMap.get(name);
+          if (!existing || interp.status === 'cxl') {
+            interpMap.set(name, interp);
+          }
+        }
+        for (const interp of interpMap.values()) {
+          const name = interp.name;
           if (!staffMap[name]) staffMap[name] = [];
           staffMap[name].push({ p, status: interp.status || 'active', cxlLabel: interp.cxl_label || 'CXL', projectCxl });
         }

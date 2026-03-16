@@ -101,10 +101,14 @@ function extractInterpreters(memo) {
     extractNames(m[1]).forEach(n => cxl.push({ name: n, label: 'CXL' }));
   }
 
-  // 重複除去（nameで）
+  // 重複除去（nameで）CXL優先
   const cxlUniq = [...new Map(cxl.map(c => [c.name, c])).values()];
+  const cxlNames = new Set(cxlUniq.map(c => c.name));
 
-  return { active: [...new Set(active)], cxl: cxlUniq };
+  // activeにCXLと同名がいれば除外（CXL優先）
+  const activeUniq = [...new Set(active)].filter(n => !cxlNames.has(n));
+
+  return { active: activeUniq, cxl: cxlUniq };
 }
 
 /**
