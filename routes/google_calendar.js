@@ -82,20 +82,28 @@ function extractInterpreters(memo) {
   }
 
   const active = [];
-  const cxl = [];
+  const cxl = []; // { name, label }
 
-  const activeRe = /通訳[：:]([^\n\r]+)/g;
-  const cxlRe = /(?:NG|キャンセル|CXL)[：:]([^\n\r]+)/gi;
+  // コロン（全角・半角）＋セミコロン（全角・半角）両対応
+  const activeRe = /通訳[：:；;]([^\n\r]+)/g;
+  const ngRe     = /NG[：:；;]([^\n\r]+)/gi;
+  const cxlRe    = /(?:キャンセル|CXL)[：:；;]([^\n\r]+)/gi;
 
   let m;
   while ((m = activeRe.exec(memo)) !== null) {
     extractNames(m[1]).forEach(n => active.push(n));
   }
+  while ((m = ngRe.exec(memo)) !== null) {
+    extractNames(m[1]).forEach(n => cxl.push({ name: n, label: 'NG' }));
+  }
   while ((m = cxlRe.exec(memo)) !== null) {
-    extractNames(m[1]).forEach(n => cxl.push(n));
+    extractNames(m[1]).forEach(n => cxl.push({ name: n, label: 'CXL' }));
   }
 
-  return { active: [...new Set(active)], cxl: [...new Set(cxl)] };
+  // 重複除去（nameで）
+  const cxlUniq = [...new Map(cxl.map(c => [c.name, c])).values()];
+
+  return { active: [...new Set(active)], cxl: cxlUniq };
 }
 
 /**
@@ -105,31 +113,32 @@ function extractInterpreters(memo) {
  * - activeにもcxlにもないが既にDBにある名前 → status='cxl'（メモから削除された）
  */
 async function syncInterpreters(projectId, active, cxl) {
-  // 既存レコードを取得
   const existing = await pool.query(
-    "SELECT name, status FROM project_interpreters WHERE project_id=$1",
+    "SELECT name, status, cxl_label FROM project_interpreters WHERE project_id=$1",
     [projectId]
   );
-  const existingMap = new Map(existing.rows.map(r => [r.name, r.status]));
-
-  const allNames = new Set([...active, ...cxl, ...existingMap.keys()]);
+  const existingMap = new Map(existing.rows.map(r => [r.name, r]));
+  const cxlMap = new Map(cxl.map(c => [c.name, c]));
+  const allNames = new Set([...active, ...cxl.map(c => c.name), ...existingMap.keys()]);
 
   for (const name of allNames) {
-    let newStatus;
-    if (cxl.includes(name)) {
+    let newStatus, newLabel;
+    if (cxlMap.has(name)) {
       newStatus = 'cxl';
+      newLabel  = cxlMap.get(name).label || 'CXL';
     } else if (active.includes(name)) {
       newStatus = 'active';
+      newLabel  = null;
     } else {
-      // メモから消えた → CXLに
       newStatus = 'cxl';
+      newLabel  = existingMap.get(name)?.cxl_label || 'CXL';
     }
 
     await pool.query(`
-      INSERT INTO project_interpreters (project_id, name, status)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (project_id, name) DO UPDATE SET status = $3
-    `, [projectId, name, newStatus]);
+      INSERT INTO project_interpreters (project_id, name, status, cxl_label)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (project_id, name) DO UPDATE SET status = $3, cxl_label = $4
+    `, [projectId, name, newStatus, newLabel]);
   }
 }
 
