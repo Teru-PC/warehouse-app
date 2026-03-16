@@ -65,6 +65,7 @@ function extractInterpreters(memo) {
   function cleanName(raw) {
     return raw
       .replace(/さん/g, '')
+      .replace(/[→＞>].*/g, '')   // 矢印（全角・半角）以降を除去
       .replace(/（[^）]*）/g, '')
       .replace(/\([^)]*\)/g, '')
       .replace(/[　\s]/g, '')

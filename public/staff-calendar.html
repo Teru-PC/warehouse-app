@@ -369,7 +369,7 @@
         for (const part of parts) {
           const name = part
             .replace(/さん/g, '')
-            .replace(/→.*/g, '')
+            .replace(/[→＞>].*/g, '')   // 矢印（全角・半角）以降を除去
             .replace(/（[^）]*）/g, '')
             .replace(/\([^)]*\)/g, '')
             .replace(/[　\s]/g, '')
@@ -432,19 +432,21 @@
 
       // project_interpretersテーブルのデータを優先
       const interps = Array.isArray(p.interpreters) ? p.interpreters : [];
+      const projectCxl = p.is_cancelled === true;
+
       if (interps.length > 0) {
         for (const interp of interps) {
           const name = interp.name;
           if (!name) continue;
           if (!staffMap[name]) staffMap[name] = [];
-          staffMap[name].push({ p, status: interp.status || 'active' });
+          staffMap[name].push({ p, status: interp.status || 'active', cxlLabel: interp.cxl_label || 'CXL', projectCxl });
         }
       } else {
         // フォールバック：メモから抽出（旧方式）
         const names = extractNames(p.memo);
         for (const name of names) {
           if (!staffMap[name]) staffMap[name] = [];
-          staffMap[name].push({ p, status: 'active' });
+          staffMap[name].push({ p, status: 'active', cxlLabel: 'CXL', projectCxl });
         }
       }
     }
@@ -558,13 +560,17 @@
           return s && e && s <= day && e >= day;
         });
 
-        for (const { p, status: interpStatus } of dayProjects) {
+        for (const { p, status: interpStatus, cxlLabel, projectCxl } of dayProjects) {
           const isCxl = interpStatus === 'cxl';
           const block = document.createElement('div');
           block.className = `ev-block ${p.status || 'draft'}`;
 
-          if (isCxl) {
-            // CXL：グレー表示
+          if (projectCxl) {
+            // 案件CXL：グレーボタン・水色文字
+            block.style.background = '#e5e7eb';
+            block.style.borderColor = '#9ca3af';
+          } else if (isCxl) {
+            // 通訳CXL/NG：グレーボタン
             block.style.background = '#e5e7eb';
             block.style.borderColor = '#9ca3af';
             block.style.color = '#6b7280';
@@ -582,11 +588,20 @@
           const endTime   = getTimeStr(p.usage_end_at   || p.usage_end);
           const timeStr   = p.is_all_day ? '終日' : `${startTime}〜${endTime}`;
 
+          // ラベル生成
+          let labelHtml = '';
+          if (projectCxl) {
+            labelHtml = '<span style="color:#0ea5e9;font-weight:700;font-size:10px;">案件CXL </span>';
+          } else if (isCxl) {
+            const labelColor = (cxlLabel === 'NG') ? '#2563eb' : '#ef4444';
+            labelHtml = `<span style="color:${labelColor};font-weight:700;font-size:10px;">${cxlLabel || 'CXL'} </span>`;
+          }
+
           block.innerHTML = `
-            <div class="ev-title">${isCxl ? '<span style="color:#ef4444;font-weight:700;font-size:10px;">CXL </span>' : ''}${p.title || '(無題)'}</div>
+            <div class="ev-title">${labelHtml}${p.title || '(無題)'}</div>
             <div class="ev-time">${timeStr}</div>
           `;
-          block.title = `${isCxl ? '[CXL] ' : ''}${p.title || ''} ${timeStr}`;
+          block.title = `${projectCxl ? '[案件CXL] ' : isCxl ? `[${cxlLabel}] ` : ''}${p.title || ''} ${timeStr}`;
 
           // 長押し判定
           let pressTimer = null;
