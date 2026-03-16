@@ -180,6 +180,8 @@ async function importFromGoogle() {
     }
 
     const now = new Date();
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     const threeMonthsLater = new Date();
     threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
 
@@ -189,7 +191,7 @@ async function importFromGoogle() {
     do {
       const response = await calendar.events.list({
         calendarId: "primary",
-        timeMin: now.toISOString(),
+        timeMin: twoWeeksAgo.toISOString(),
         timeMax: threeMonthsLater.toISOString(),
         singleEvents: true,
         orderBy: "startTime",
