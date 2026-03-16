@@ -278,7 +278,7 @@
   // ★ 抽出するキーワードリスト
   // 「キーワード：名前1、名前2」形式で複数名対応
   // コロンは全角（：）・半角(:)両対応、「さん」は自動除去
-  const KEYWORDS = ['通訳'];
+  const KEYWORDS = ['通訳']; // メモ抽出フォールバック用
 
   const prevBtn    = document.getElementById('prevBtn');
   const nextBtn    = document.getElementById('nextBtn');
@@ -419,24 +419,35 @@
 
     // 名前→案件マッピングを構築
     // staffMap: { 名前: [ {project, dateStr} ] }
-    const staffMap = {};
+    // staffMap: { 名前: [ {project, status} ] }
+    // interpretersテーブルがあればそちらを優先、なければメモから抽出
+    const staffMap = {}; // name -> [{p, status}]
 
     for (const p of projects) {
-      const names = extractNames(p.memo);
-      if (!names.length) continue;
-
       const eventStart = toJstDateStr(p.usage_start_at || p.usage_start);
       const eventEnd   = toJstDateStr(p.usage_end_at   || p.usage_end);
       if (!eventStart || !eventEnd) continue;
 
-      // この案件が表示期間内にあるか
-      const rangeEnd = days[days.length-1];
+      const rangeEnd   = days[days.length-1];
       const rangeStart = days[0];
       if (eventStart > rangeEnd || eventEnd < rangeStart) continue;
 
-      for (const name of names) {
-        if (!staffMap[name]) staffMap[name] = [];
-        staffMap[name].push(p);
+      // project_interpretersテーブルのデータを優先
+      const interps = Array.isArray(p.interpreters) ? p.interpreters : [];
+      if (interps.length > 0) {
+        for (const interp of interps) {
+          const name = interp.name;
+          if (!name) continue;
+          if (!staffMap[name]) staffMap[name] = [];
+          staffMap[name].push({ p, status: interp.status || 'active' });
+        }
+      } else {
+        // フォールバック：メモから抽出（旧方式）
+        const names = extractNames(p.memo);
+        for (const name of names) {
+          if (!staffMap[name]) staffMap[name] = [];
+          staffMap[name].push({ p, status: 'active' });
+        }
       }
     }
 
@@ -445,12 +456,12 @@
     // ソート：指定日に予定がある人を上に
     if (sortByDate) {
       staffList = staffList.sort((a, b) => {
-        const aHas = staffMap[a].some(p => {
+        const aHas = staffMap[a].some(({ p }) => {
           const s = toJstDateStr(p.usage_start_at || p.usage_start);
           const e = toJstDateStr(p.usage_end_at   || p.usage_end);
           return s <= sortByDate && e >= sortByDate;
         });
-        const bHas = staffMap[b].some(p => {
+        const bHas = staffMap[b].some(({ p }) => {
           const s = toJstDateStr(p.usage_start_at || p.usage_start);
           const e = toJstDateStr(p.usage_end_at   || p.usage_end);
           return s <= sortByDate && e >= sortByDate;
@@ -521,7 +532,7 @@
       const row = document.createElement('tr');
 
       // この行にソート日の予定があるか
-      const hasSortDay = sortByDate && myProjects.some(p => {
+      const hasSortDay = sortByDate && myProjects.some(({ p }) => {
         const s = toJstDateStr(p.usage_start_at || p.usage_start);
         const e = toJstDateStr(p.usage_end_at   || p.usage_end);
         return s <= sortByDate && e >= sortByDate;
@@ -543,18 +554,24 @@
         if (day === today) td.classList.add('is-today');
 
         // この日にある案件を探す
-        const dayProjects = myProjects.filter(p => {
+        const dayProjects = myProjects.filter(({ p }) => {
           const s = toJstDateStr(p.usage_start_at || p.usage_start);
           const e = toJstDateStr(p.usage_end_at   || p.usage_end);
           return s && e && s <= day && e >= day;
         });
 
-        for (const p of dayProjects) {
+        for (const { p, status: interpStatus } of dayProjects) {
+          const isCxl = interpStatus === 'cxl';
           const block = document.createElement('div');
           block.className = `ev-block ${p.status || 'draft'}`;
 
-          // カスタムカラー適用
-          if (p.color) {
+          if (isCxl) {
+            // CXL：グレー表示
+            block.style.background = '#e5e7eb';
+            block.style.borderColor = '#9ca3af';
+            block.style.color = '#6b7280';
+          } else if (p.color) {
+            // 通常：案件カラー
             const bg = lightenColor(p.color, 70);
             if (bg) {
               block.style.background = bg;
@@ -568,10 +585,10 @@
           const timeStr   = p.is_all_day ? '終日' : `${startTime}〜${endTime}`;
 
           block.innerHTML = `
-            <div class="ev-title">${p.title || '(無題)'}</div>
+            <div class="ev-title">${isCxl ? '<span style="color:#ef4444;font-weight:700;font-size:10px;">CXL </span>' : ''}${p.title || '(無題)'}</div>
             <div class="ev-time">${timeStr}</div>
           `;
-          block.title = `${p.title || ''} ${timeStr}`;
+          block.title = `${isCxl ? '[CXL] ' : ''}${p.title || ''} ${timeStr}`;
 
           // 長押し判定
           let pressTimer = null;
