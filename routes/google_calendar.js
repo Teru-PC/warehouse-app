@@ -189,7 +189,7 @@ async function importFromGoogle() {
       timeMax: threeMonthsLater.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
-      maxResults: 100
+      maxResults: 2500
     });
 
     const events = response.data.items || [];
