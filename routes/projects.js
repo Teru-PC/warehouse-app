@@ -55,9 +55,18 @@ router.get("/projects/interpreter", auth, async (req, res) => {
       SELECT
         p.*,
         p.usage_start AS usage_start_at,
-        p.usage_end   AS usage_end_at
+        p.usage_end   AS usage_end_at,
+        COALESCE(
+          json_agg(
+            json_build_object('name', pi.name, 'status', pi.status)
+          ) FILTER (WHERE pi.id IS NOT NULL),
+          '[]'
+        ) AS interpreters
       FROM projects p
+      LEFT JOIN project_interpreters pi ON pi.project_id = p.id
       WHERE COALESCE(p.hidden_interpreter, false) = false
+         OR EXISTS (SELECT 1 FROM project_interpreters pi2 WHERE pi2.project_id = p.id)
+      GROUP BY p.id
       ORDER BY p.usage_start ASC NULLS LAST, p.id ASC
     `);
     res.json(result.rows);
