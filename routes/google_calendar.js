@@ -279,9 +279,13 @@ async function importFromGoogle() {
         ]);
 
         // 通訳者テーブルを同期
-        await syncInterpreters(projectId, active, cxl);
+        try {
+          await syncInterpreters(projectId, active, cxl);
+        } catch(syncErr) {
+          console.error(`syncInterpreters error for ${event.summary}:`, syncErr.message);
+        }
         updatedCount++;
-        console.log(`Updated: ${event.summary} | active:[${active}] cxl:[${cxl}]`);
+        console.log(`Updated: ${event.summary} | active:[${active}] cxl:[${cxl.map(c=>c.name+'('+c.label+')')}]`);
 
       } else {
         // ─── ゴミ箱チェック ───
@@ -317,7 +321,11 @@ async function importFromGoogle() {
         ]);
 
         // 通訳者テーブルに登録
-        await syncInterpreters(inserted.rows[0].id, active, cxl);
+        try {
+          await syncInterpreters(inserted.rows[0].id, active, cxl);
+        } catch(syncErr) {
+          console.error(`syncInterpreters error for ${event.summary}:`, syncErr.message);
+        }
         importedCount++;
         console.log(`Imported: ${event.summary} | active:[${active}] cxl:[${cxl}]`);
       }
