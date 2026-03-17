@@ -552,6 +552,16 @@
         row.appendChild(td);
       }
 
+      // 在庫不足：赤枠＋案件名を赤文字
+      if (shortageMap.get(p.id)) {
+        row.style.outline = '2px solid #dc2626';
+        row.style.outlineOffset = '-1px';
+        const tdPEl = row.querySelector('.td-project');
+        if (tdPEl) {
+          tdPEl.innerHTML = `<span style="color:#dc2626;font-weight:700;font-size:10px;">⚠️機材不足 </span>${p.title || '(無題)'}`;
+        }
+      }
+
       calBody.appendChild(row);
     }
   }

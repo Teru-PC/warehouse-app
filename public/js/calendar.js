@@ -231,8 +231,18 @@
   }
 
   async function fetchShortages(days) {
-    // 在庫不足表示は発送カレンダーのみ
-    return new Map();
+    try {
+      const from = days[0];
+      const to   = days[days.length - 1];
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`/api/shortages?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+      if (!res.ok) return new Map();
+      const json = await res.json();
+      const map = new Map();
+      for (const s of (json.projects || [])) map.set(s.project_id, s.shortage);
+      return map;
+    } catch { return new Map(); }
   }
 
   function layoutOverlaps(segs) {
@@ -384,17 +394,20 @@
       for (const s of layoutOverlaps(segs)) {
         const el = document.createElement("div");
         el.className = `cal-project ${s.status}`;
-        if (s.shortage) el.classList.add("cal-project--shortage");
         if (s.color) {
-          el.style.border = `2px solid ${s.color}`;
+          el.style.border = s.shortage ? '3px solid #dc2626' : `2px solid ${s.color}`;
           el.style.background = lightenColor(s.color, 60);
-          el.style.color = '#333333';
         } else if (s.color_key) {
           el.classList.add(`cal-color--${s.color_key}`);
+          if (s.shortage) el.style.border = '3px solid #dc2626';
         }
         el.style.color = '#333333';
         el.style.textShadow = '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff';
-        el.textContent = s.title;
+        if (s.shortage) {
+          el.innerHTML = `<span style="color:#dc2626;font-weight:700;font-size:10px;">⚠️機材不足 </span>${s.title}`;
+        } else {
+          el.textContent = s.title;
+        }
         el.style.top = `${(s.startMin / DAY_MIN) * 100}%`;
         el.style.height = `${((s.endMin - s.startMin) / DAY_MIN) * 100}%`;
         el.style.left = `calc(${s.colIndex * 40}px + ${GUTTER_PX}px)`;
