@@ -122,12 +122,12 @@ async function handleRangeShortage(req, res) {
               AND (
                 CASE
                   WHEN p.shipping_date IS NOT NULL AND p.return_due_date IS NOT NULL
-                    THEN p.shipping_date::date < $3::date
-                     AND p.return_due_date::date > $2::date
+                    THEN p.shipping_date < $3::date
+                     AND p.return_due_date > $2::date
                   ELSE
                     p.usage_start IS NOT NULL AND p.usage_end IS NOT NULL
-                    AND p.usage_start < $3::timestamptz
-                    AND p.usage_end   > $2::timestamptz
+                    AND p.usage_start < $3::timestamp with time zone
+                    AND p.usage_end   > $2::timestamp with time zone
                 END
               )
             GROUP BY pi.equipment_id
@@ -138,7 +138,11 @@ async function handleRangeShortage(req, res) {
           LEFT JOIN used u ON u.equipment_id = r.equipment_id
         `, [p.id, rangeStart, rangeEnd]);
 
-        return { project_id: p.id, shortage: r.rows[0]?.shortage ?? false };
+        const shortage = r.rows[0]?.shortage === true;
+        if (p.id === 192 || p.id === 193) {
+          console.log(`DEBUG2 project ${p.id}: rangeStart=${rangeStart} rangeEnd=${rangeEnd} result=${JSON.stringify(r.rows[0])}`);
+        }
+        return { project_id: p.id, shortage };
       } catch(e) {
         console.error(`shortage check error for project ${p.id}:`, e.message);
         return { project_id: p.id, shortage: false };
