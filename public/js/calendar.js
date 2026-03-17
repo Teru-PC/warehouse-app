@@ -231,18 +231,8 @@
   }
 
   async function fetchShortages(days) {
-    try {
-      const from = days[0];
-      const to   = days[days.length - 1];
-      const token = localStorage.getItem('token') || '';
-      const res = await fetch(`/api/shortages?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-        { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
-      if (!res.ok) return new Map();
-      const json = await res.json();
-      const map = new Map();
-      for (const s of (json.projects || [])) map.set(s.project_id, s.shortage);
-      return map;
-    } catch { return new Map(); }
+    // 在庫不足表示は発送カレンダーのみ
+    return new Map();
   }
 
   function layoutOverlaps(segs) {
