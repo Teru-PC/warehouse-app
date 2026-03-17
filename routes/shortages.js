@@ -102,13 +102,9 @@ async function handleRangeShortage(req, res) {
     // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
       const useShipping = p.shipping_date && p.return_due_date;
-      // 期間の決定（shipping優先、なければusage）- 必ずISO文字列で渡す
-      const rangeStart = useShipping
-        ? (p.shipping_date instanceof Date ? p.shipping_date.toISOString() : String(p.shipping_date))
-        : (p.usage_start instanceof Date ? p.usage_start.toISOString() : String(p.usage_start));
-      const rangeEnd = useShipping
-        ? (p.return_due_date instanceof Date ? p.return_due_date.toISOString() : String(p.return_due_date))
-        : (p.usage_end instanceof Date ? p.usage_end.toISOString() : String(p.usage_end));
+      // 期間の決定（shipping優先、なければusage）
+      const rangeStart = useShipping ? p.shipping_date : p.usage_start;
+      const rangeEnd   = useShipping ? p.return_due_date : p.usage_end;
 
       try {
         const r = await pool.query(`
@@ -141,7 +137,9 @@ async function handleRangeShortage(req, res) {
           LEFT JOIN used u ON u.equipment_id = r.equipment_id
         `, [p.id, rangeStart, rangeEnd]);
 
-        return { project_id: p.id, shortage: r.rows[0]?.shortage ?? false };
+        const shortage = r.rows[0]?.shortage ?? false;
+        if (shortage) console.log(`SHORTAGE DETECTED: project ${p.id} rangeStart=${rangeStart} rangeEnd=${rangeEnd}`);
+        return { project_id: p.id, shortage };
       } catch(e) {
         console.error(`shortage check error for project ${p.id}:`, e.message);
         return { project_id: p.id, shortage: false };
