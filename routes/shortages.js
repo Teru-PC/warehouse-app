@@ -144,9 +144,6 @@ async function handleRangeShortage(req, res) {
         `, [p.id, rangeStart, rangeEnd]);
 
         const shortage = r.rows[0]?.shortage === true;
-        if (p.id === 192 || p.id === 193) {
-          console.log(`DEBUG2 project ${p.id}: rangeStart=${rangeStart} rangeEnd=${rangeEnd} result=${JSON.stringify(r.rows[0])}`);
-        }
         return { project_id: p.id, shortage };
       } catch(e) {
         console.error(`shortage check error for project ${p.id}:`, e.message);
