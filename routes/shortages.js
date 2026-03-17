@@ -102,11 +102,10 @@ async function handleRangeShortage(req, res) {
     // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
       const useShipping = p.shipping_date && p.return_due_date;
-      const rangeStart = useShipping ? p.shipping_date : p.usage_start;
-      const rangeEnd   = useShipping ? p.return_due_date : p.usage_end;
-      if (p.id === 192 || p.id === 193) {
-        console.log(`DEBUG project ${p.id}: rangeStart=${rangeStart} type=${typeof rangeStart} rangeEnd=${rangeEnd}`);
-      }
+      // DateオブジェクトをISO文字列に変換してから渡す
+      const toStr = (v) => v instanceof Date ? v.toISOString() : String(v);
+      const rangeStart = toStr(useShipping ? p.shipping_date : p.usage_start);
+      const rangeEnd   = toStr(useShipping ? p.return_due_date : p.usage_end);
 
       try {
         const r = await pool.query(`
