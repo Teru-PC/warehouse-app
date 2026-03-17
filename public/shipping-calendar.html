@@ -470,12 +470,19 @@
       // スキップセット
       const skipSet = new Set();
 
+      const isShortage = shortageMap.get(p.id) === true;
+
       function makeBlock(cls, text, title, isLight, onclick) {
         const block = document.createElement('div');
         block.className = `block ${status} ${cls}`;
         applyColor(block, p.color, isLight);
-        block.textContent = text;
-        block.title = title;
+        if (isShortage) {
+          block.style.border = '2px solid #dc2626';
+          block.innerHTML = `<span style="color:#dc2626;font-weight:700;font-size:10px;">⚠️機材不足 </span>${text}`;
+        } else {
+          block.textContent = text;
+        }
+        block.title = isShortage ? `⚠️機材不足 ${title}` : title;
         block.addEventListener('mouseup', ev => {
           if (ev.button !== 0) return;
           if (dragMoved) return;
@@ -504,9 +511,10 @@
             td.colSpan = span;
             const block = document.createElement('div');
             block.className = `block light`;
-            block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
-            block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
-            block.title = `発送〜本番: ${p.title}`;
+            const shipBorder = isShortage ? '#dc2626' : (p.color || '#e5e7eb');
+            block.style.cssText = `background:#fff !important; border:2px solid ${shipBorder} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
+            block.innerHTML = `${isShortage ? '<span style="color:#dc2626;font-weight:700;font-size:10px;">⚠️機材不足 </span>' : ''}<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【発送】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
+            block.title = `${isShortage ? '⚠️機材不足 ' : ''}発送〜本番: ${p.title}`;
             block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
             td.appendChild(block);
             row.appendChild(td);
@@ -539,9 +547,10 @@
             td.colSpan = span;
             const block = document.createElement('div');
             block.className = `block light`;
-            block.style.cssText = `background:#fff !important; border:2px solid ${p.color || '#e5e7eb'} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
-            block.innerHTML = `<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
-            block.title = `返却期間: ${p.title}`;
+            const retBorder = isShortage ? '#dc2626' : (p.color || '#e5e7eb');
+            block.style.cssText = `background:#fff !important; border:2px solid ${retBorder} !important; border-radius:6px; display:flex; align-items:center; gap:4px; padding:2px 6px; cursor:pointer;`;
+            block.innerHTML = `${isShortage ? '<span style="color:#dc2626;font-weight:700;font-size:10px;">⚠️機材不足 </span>' : ''}<span style="color:#ef4444;font-weight:bold;font-size:10px;white-space:nowrap;">【返却】</span><span style="color:#333;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.title || ''}</span>`;
+            block.title = `${isShortage ? '⚠️機材不足 ' : ''}返却期間: ${p.title}`;
             block.addEventListener('mouseup', ev => { if (ev.button !== 0) return; if (dragMoved) return; openChecklist(p); });
             td.appendChild(block);
             row.appendChild(td);
@@ -553,12 +562,11 @@
       }
 
       // 在庫不足：赤枠＋案件名を赤文字
-      if (shortageMap.get(p.id)) {
-        row.style.outline = '2px solid #dc2626';
-        row.style.outlineOffset = '-1px';
+      if (isShortage) {
         const tdPEl = row.querySelector('.td-project');
         if (tdPEl) {
-          tdPEl.innerHTML = `<span style="color:#dc2626;font-weight:700;font-size:10px;">⚠️機材不足 </span>${p.title || '(無題)'}`;
+          tdPEl.style.color = '#dc2626';
+          tdPEl.style.fontWeight = '700';
         }
       }
 
