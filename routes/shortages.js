@@ -102,9 +102,11 @@ async function handleRangeShortage(req, res) {
     // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
       const useShipping = p.shipping_date && p.return_due_date;
-      // 期間の決定（shipping優先、なければusage）
       const rangeStart = useShipping ? p.shipping_date : p.usage_start;
       const rangeEnd   = useShipping ? p.return_due_date : p.usage_end;
+      if (p.id === 192 || p.id === 193) {
+        console.log(`DEBUG project ${p.id}: rangeStart=${rangeStart} type=${typeof rangeStart} rangeEnd=${rangeEnd}`);
+      }
 
       try {
         const r = await pool.query(`
@@ -137,9 +139,7 @@ async function handleRangeShortage(req, res) {
           LEFT JOIN used u ON u.equipment_id = r.equipment_id
         `, [p.id, rangeStart, rangeEnd]);
 
-        const shortage = r.rows[0]?.shortage ?? false;
-        if (shortage) console.log(`SHORTAGE DETECTED: project ${p.id} rangeStart=${rangeStart} rangeEnd=${rangeEnd}`);
-        return { project_id: p.id, shortage };
+        return { project_id: p.id, shortage: r.rows[0]?.shortage ?? false };
       } catch(e) {
         console.error(`shortage check error for project ${p.id}:`, e.message);
         return { project_id: p.id, shortage: false };
