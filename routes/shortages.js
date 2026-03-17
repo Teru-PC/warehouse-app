@@ -20,16 +20,15 @@ router.get("/shortages", auth, async (req, res) => {
     if (!proj.rows.length) return res.status(404).json({ message: "Project not found" });
 
     const p = proj.rows[0];
-    // 発送日〜返却日 と 使用開始〜終了 の最大範囲で判定
-    const toStr2 = (v) => v instanceof Date ? v.toISOString() : String(v);
-    const sCandidates = [];
-    if (p.shipping_date) sCandidates.push(new Date(p.shipping_date));
-    if (p.usage_start)   sCandidates.push(new Date(p.usage_start));
-    const eCandidates = [];
-    if (p.return_due_date) eCandidates.push(new Date(p.return_due_date));
-    if (p.usage_end)       eCandidates.push(new Date(p.usage_end));
-    const rangeStart = sCandidates.length ? toStr2(new Date(Math.min(...sCandidates))) : null;
-    const rangeEnd   = eCandidates.length ? toStr2(new Date(Math.max(...eCandidates))) : null;
+    // 日単位で判定
+    const toJstDate = (d) => {
+      const dt = d instanceof Date ? d : new Date(d);
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).format(dt);
+    };
+    const startDate = p.shipping_date ? toJstDate(p.shipping_date) : (p.usage_start ? toJstDate(p.usage_start) : null);
+    const endDate   = p.return_due_date ? toJstDate(p.return_due_date) : (p.usage_end ? toJstDate(p.usage_end) : null);
+    const rangeStart = startDate ? `${startDate}T00:00:00+09:00` : null;
+    const rangeEnd   = endDate   ? `${endDate}T23:59:59+09:00`   : null;
 
     if (!rangeStart || !rangeEnd) {
       return res.status(400).json({ message: "期間が設定されていません" });
@@ -50,15 +49,9 @@ router.get("/shortages", auth, async (req, res) => {
             CASE
               WHEN 1=1
                 THEN
-                LEAST(
-                  COALESCE(p.shipping_date::timestamptz, p.usage_start),
-                  COALESCE(p.usage_start, p.shipping_date::timestamptz)
-                ) < $3::timestamptz
+                COALESCE(p.shipping_date::date, p.usage_start::date) <= $3::date
                 AND
-                GREATEST(
-                  COALESCE(p.return_due_date::timestamptz, p.usage_end),
-                  COALESCE(p.usage_end, p.return_due_date::timestamptz)
-                ) > $2::timestamptz
+                COALESCE(p.return_due_date::date, p.usage_end::date) >= $2::date
             END
           )
         GROUP BY pi.equipment_id
@@ -112,16 +105,17 @@ async function handleRangeShortage(req, res) {
 
     // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
-      // 発送日〜返却日 と 使用開始〜終了 の最大範囲で判定
-      const toStr = (v) => v instanceof Date ? v.toISOString() : String(v);
-      const candidates = [];
-      if (p.shipping_date) candidates.push(new Date(p.shipping_date));
-      if (p.usage_start)   candidates.push(new Date(p.usage_start));
-      const endCandidates = [];
-      if (p.return_due_date) endCandidates.push(new Date(p.return_due_date));
-      if (p.usage_end)       endCandidates.push(new Date(p.usage_end));
-      const rangeStart = toStr(candidates.length ? new Date(Math.min(...candidates)) : p.usage_start);
-      const rangeEnd   = toStr(endCandidates.length ? new Date(Math.max(...endCandidates)) : p.usage_end);
+      // 日単位で判定：案件が存在する日付の開始〜終了（JST）
+      const toJstDateStr = (d) => {
+        const dt = d instanceof Date ? d : new Date(d);
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).format(dt);
+      };
+      // 案件の日付範囲（発送日優先、なければusage）
+      const startDate = p.shipping_date ? toJstDateStr(p.shipping_date) : toJstDateStr(p.usage_start);
+      const endDate   = p.return_due_date ? toJstDateStr(p.return_due_date) : toJstDateStr(p.usage_end);
+      // 日の開始（JST 00:00）〜翌日開始（JST 00:00）でtimestamptzに変換
+      const rangeStart = `${startDate}T00:00:00+09:00`;
+      const rangeEnd   = `${endDate}T23:59:59+09:00`;
 
       try {
         const r = await pool.query(`
@@ -136,15 +130,10 @@ async function handleRangeShortage(req, res) {
             JOIN projects p ON p.id = pi.project_id
             WHERE p.id <> $1
               AND (
-                LEAST(
-                  COALESCE(p.shipping_date::timestamptz, p.usage_start),
-                  p.usage_start
-                ) < $3::timestamptz
+                -- 日単位で重複チェック（発送日優先、なければusage）
+                COALESCE(p.shipping_date::date, p.usage_start::date) <= $3::date
                 AND
-                GREATEST(
-                  COALESCE(p.return_due_date::timestamptz, p.usage_end),
-                  p.usage_end
-                ) > $2::timestamptz
+                COALESCE(p.return_due_date::date, p.usage_end::date) >= $2::date
               )
             GROUP BY pi.equipment_id
           )
