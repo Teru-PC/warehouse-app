@@ -119,17 +119,10 @@ async function handleRangeShortage(req, res) {
             FROM project_items pi
             JOIN projects p ON p.id = pi.project_id
             WHERE p.id <> $1
-              AND (
-                CASE
-                  WHEN p.shipping_date IS NOT NULL AND p.return_due_date IS NOT NULL
-                    THEN p.shipping_date < $3::date
-                     AND p.return_due_date > $2::date
-                  ELSE
-                    p.usage_start IS NOT NULL AND p.usage_end IS NOT NULL
-                    AND p.usage_start < $3::timestamp with time zone
-                    AND p.usage_end   > $2::timestamp with time zone
-                END
-              )
+              AND p.usage_start IS NOT NULL
+              AND p.usage_end IS NOT NULL
+              AND p.usage_start < $3::timestamptz
+              AND p.usage_end   > $2::timestamptz
             GROUP BY pi.equipment_id
           )
           SELECT bool_or(r.required > (e.total_quantity::int - COALESCE(u.used,0)::int)) AS shortage
