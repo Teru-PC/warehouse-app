@@ -20,9 +20,16 @@ router.get("/shortages", auth, async (req, res) => {
     if (!proj.rows.length) return res.status(404).json({ message: "Project not found" });
 
     const p = proj.rows[0];
-    const useShipping = p.shipping_date && p.return_due_date;
-    const rangeStart  = useShipping ? p.shipping_date : p.usage_start;
-    const rangeEnd    = useShipping ? p.return_due_date : p.usage_end;
+    // 発送日〜返却日 と 使用開始〜終了 の最大範囲で判定
+    const toStr2 = (v) => v instanceof Date ? v.toISOString() : String(v);
+    const sCandidates = [];
+    if (p.shipping_date) sCandidates.push(new Date(p.shipping_date));
+    if (p.usage_start)   sCandidates.push(new Date(p.usage_start));
+    const eCandidates = [];
+    if (p.return_due_date) eCandidates.push(new Date(p.return_due_date));
+    if (p.usage_end)       eCandidates.push(new Date(p.usage_end));
+    const rangeStart = sCandidates.length ? toStr2(new Date(Math.min(...sCandidates))) : null;
+    const rangeEnd   = eCandidates.length ? toStr2(new Date(Math.max(...eCandidates))) : null;
 
     if (!rangeStart || !rangeEnd) {
       return res.status(400).json({ message: "期間が設定されていません" });
@@ -41,13 +48,17 @@ router.get("/shortages", auth, async (req, res) => {
         WHERE p.id <> $1
           AND (
             CASE
-              WHEN p.shipping_date IS NOT NULL AND p.return_due_date IS NOT NULL
-                THEN p.shipping_date::date < $3::date
-                 AND p.return_due_date::date > $2::date
-              ELSE
-                p.usage_start IS NOT NULL AND p.usage_end IS NOT NULL
-                AND p.usage_start < $3::timestamptz
-                AND p.usage_end   > $2::timestamptz
+              WHEN 1=1
+                THEN
+                LEAST(
+                  COALESCE(p.shipping_date::timestamptz, p.usage_start),
+                  COALESCE(p.usage_start, p.shipping_date::timestamptz)
+                ) < $3::timestamptz
+                AND
+                GREATEST(
+                  COALESCE(p.return_due_date::timestamptz, p.usage_end),
+                  COALESCE(p.usage_end, p.return_due_date::timestamptz)
+                ) > $2::timestamptz
             END
           )
         GROUP BY pi.equipment_id
@@ -101,11 +112,16 @@ async function handleRangeShortage(req, res) {
 
     // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
-      const useShipping = p.shipping_date && p.return_due_date;
-      // DateオブジェクトをISO文字列に変換してから渡す
+      // 発送日〜返却日 と 使用開始〜終了 の最大範囲で判定
       const toStr = (v) => v instanceof Date ? v.toISOString() : String(v);
-      const rangeStart = toStr(useShipping ? p.shipping_date : p.usage_start);
-      const rangeEnd   = toStr(useShipping ? p.return_due_date : p.usage_end);
+      const candidates = [];
+      if (p.shipping_date) candidates.push(new Date(p.shipping_date));
+      if (p.usage_start)   candidates.push(new Date(p.usage_start));
+      const endCandidates = [];
+      if (p.return_due_date) endCandidates.push(new Date(p.return_due_date));
+      if (p.usage_end)       endCandidates.push(new Date(p.usage_end));
+      const rangeStart = toStr(candidates.length ? new Date(Math.min(...candidates)) : p.usage_start);
+      const rangeEnd   = toStr(endCandidates.length ? new Date(Math.max(...endCandidates)) : p.usage_end);
 
       try {
         const r = await pool.query(`
@@ -119,10 +135,17 @@ async function handleRangeShortage(req, res) {
             FROM project_items pi
             JOIN projects p ON p.id = pi.project_id
             WHERE p.id <> $1
-              AND p.usage_start IS NOT NULL
-              AND p.usage_end IS NOT NULL
-              AND p.usage_start < $3::timestamptz
-              AND p.usage_end   > $2::timestamptz
+              AND (
+                LEAST(
+                  COALESCE(p.shipping_date::timestamptz, p.usage_start),
+                  p.usage_start
+                ) < $3::timestamptz
+                AND
+                GREATEST(
+                  COALESCE(p.return_due_date::timestamptz, p.usage_end),
+                  p.usage_end
+                ) > $2::timestamptz
+              )
             GROUP BY pi.equipment_id
           )
           SELECT bool_or(r.required > (e.total_quantity::int - COALESCE(u.used,0)::int)) AS shortage
