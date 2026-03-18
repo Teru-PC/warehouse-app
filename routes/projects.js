@@ -16,6 +16,7 @@ router.get("/projects", auth, async (req, res) => {
         p.usage_end   AS usage_end_at
       FROM projects p
       WHERE NOT (COALESCE(p.hidden_shipping, false) = true AND COALESCE(p.hidden_interpreter, false) = true)
+        AND p.deleted_at IS NULL
       ORDER BY p.usage_start ASC NULLS LAST, p.id ASC
     `);
     res.json(result.rows);
@@ -37,6 +38,7 @@ router.get("/projects/shipping", auth, async (req, res) => {
         p.usage_end   AS usage_end_at
       FROM projects p
       WHERE COALESCE(p.hidden_shipping, false) = false
+        AND p.deleted_at IS NULL
       ORDER BY p.usage_start ASC NULLS LAST, p.id ASC
     `);
     res.json(result.rows);
@@ -64,8 +66,9 @@ router.get("/projects/interpreter", auth, async (req, res) => {
         ) AS interpreters
       FROM projects p
       LEFT JOIN project_interpreters pi ON pi.project_id = p.id
-      WHERE COALESCE(p.hidden_interpreter, false) = false
-         OR EXISTS (SELECT 1 FROM project_interpreters pi2 WHERE pi2.project_id = p.id)
+      WHERE (COALESCE(p.hidden_interpreter, false) = false
+         OR EXISTS (SELECT 1 FROM project_interpreters pi2 WHERE pi2.project_id = p.id))
+        AND p.deleted_at IS NULL
       GROUP BY p.id
       ORDER BY p.usage_start ASC NULLS LAST, p.id ASC
     `);
@@ -73,6 +76,21 @@ router.get("/projects/interpreter", auth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.json([]);
+  }
+});
+
+router.get("/projects/softdeleted", auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, venue, usage_start, usage_end, color, deleted_at
+       FROM projects
+       WHERE deleted_at IS NOT NULL
+       ORDER BY deleted_at DESC
+       LIMIT 100`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -330,6 +348,44 @@ router.post("/trash/:id/restore", auth, async (req, res) => {
     res.status(500).json({ message: err.message });
   } finally {
     client.release();
+  }
+});
+
+// ─────────────────────────────────────────────
+// 通訳カレンダー用ソフトデリート（deleted_at）
+// ─────────────────────────────────────────────
+
+/**
+ * 通訳カレンダーから案件を削除（ソフトデリート）
+ */
+router.delete("/projects/:id/soft", auth, async (req, res) => {
+  try {
+    await pool.query(
+      "UPDATE projects SET deleted_at=NOW() WHERE id=$1",
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * ソフトデリートされた案件一覧（通訳カレンダーのゴミ箱）
+ */
+/**
+ * ソフトデリートされた案件を復元
+ */
+router.post("/projects/:id/restore", auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE projects SET deleted_at=NULL WHERE id=$1 RETURNING id",
+      [req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ message: "not found" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 

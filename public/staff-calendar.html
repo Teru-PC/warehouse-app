@@ -219,6 +219,7 @@
       <button id="mobileMenuClose">✕</button>
       <a class="mobile-menu-btn" href="/calendar.html">📅 カレンダーへ</a>
       <a class="mobile-menu-btn" href="/shipping-calendar.html" style="background:#e0f7fa;color:#006064;border-color:#4dd0e1;">📦 発送確認</a>
+      <button class="mobile-menu-btn" onclick="openTrash()" style="background:#fef3c7;color:#92400e;border-color:#fcd34d;">🗑️ ゴミ箱</button>
       <div style="border-top:1px solid #e5e7eb; padding-top:8px; font-size:12px; color:#6b7280;">ズーム</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="mobile-menu-btn" id="mobileZoomOut" style="width:auto;padding:8px 16px;">－</button>
@@ -234,6 +235,7 @@
     <div style="flex:1;"></div>
     <button class="nav-btn" onclick="location.href='/calendar.html'">← カレンダーへ</button>
     <button class="nav-btn" onclick="location.href='/shipping-calendar.html'">📦 発送確認</button>
+    <button class="nav-btn" id="trashBtn" onclick="openTrash()" style="background:#fef3c7;color:#92400e;border-color:#fcd34d;">🗑️ ゴミ箱</button>
     <span id="sortBadge" onclick="clearSort()">📅 ソート中 ✕</span>
     <button class="nav-btn" id="prevBtn">◀ 前へ</button>
     <span id="rangeLabel"></span>
@@ -267,6 +269,18 @@
       <div id="detailInner"></div>
     </div>
   </div><!-- /pageWrap -->
+
+  <!-- ゴミ箱モーダル -->
+  <div id="trashModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;">
+    <div style="background:#fff;max-width:600px;margin:40px auto;border-radius:12px;padding:24px;position:relative;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:18px;font-weight:700;margin:0;">🗑️ ゴミ箱（削除済み案件）</h2>
+        <button onclick="closeTrash()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;">✕</button>
+      </div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">削除した案件を復元できます。</p>
+      <div id="trashList" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div>
 
 <script>
 (() => {
@@ -739,9 +753,9 @@
 
   window.deleteProject = async function() {
     if (!currentProjectId) return;
-    if (!confirm('この案件を通訳カレンダーから非表示にしますか？\n（他のカレンダーには影響しません）')) return;
+    if (!confirm('この案件を通訳カレンダーから削除しますか？\nゴミ箱から復元できます。')) return;
     const token = localStorage.getItem('token') || '';
-    const res = await fetch(`/api/projects/${currentProjectId}/hide-interpreter`, {
+    const res = await fetch(`/api/projects/${currentProjectId}/soft`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -750,6 +764,59 @@
       render();
     } else {
       alert('削除に失敗しました');
+    }
+  }
+
+  // ゴミ箱を開く
+  window.openTrash = async function() {
+    const modal = document.getElementById('trashModal');
+    const list  = document.getElementById('trashList');
+    modal.style.display = 'block';
+    list.innerHTML = '<p style="color:#6b7280;font-size:13px;">読み込み中...</p>';
+    const token = localStorage.getItem('token') || '';
+    try {
+      const res  = await fetch('/api/projects/softdeleted', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!data.length) {
+        list.innerHTML = '<p style="color:#6b7280;font-size:13px;">削除済みの案件はありません。</p>';
+        return;
+      }
+      list.innerHTML = data.map(p => {
+        const start = p.usage_start ? new Date(p.usage_start).toLocaleDateString('ja-JP') : '';
+        const del   = p.deleted_at  ? new Date(p.deleted_at).toLocaleString('ja-JP')      : '';
+        const color = p.color || '#3d57c4';
+        return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;">
+          <div style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:14px;">${p.title || '(無題)'}</div>
+            <div style="font-size:12px;color:#6b7280;">${start}　${p.venue || ''}</div>
+            <div style="font-size:11px;color:#9ca3af;">削除日時: ${del}</div>
+          </div>
+          <button onclick="restoreProject(${p.id})" style="background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;">↩️ 復元</button>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      list.innerHTML = '<p style="color:#dc2626;font-size:13px;">読み込みに失敗しました。</p>';
+    }
+  }
+
+  // ゴミ箱を閉じる
+  window.closeTrash = function() {
+    document.getElementById('trashModal').style.display = 'none';
+  }
+
+  // 案件を復元
+  window.restoreProject = async function(id) {
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(`/api/projects/${id}/restore`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      await openTrash(); // ゴミ箱を再読み込み
+      render();          // カレンダー再描画
+    } else {
+      alert('復元に失敗しました');
     }
   }
 

@@ -152,6 +152,9 @@ const COLOR_MAP = {
   '6':'#f4511e','7':'#039be5','8':'#616161','9':'#3f51b5','10':'#0b8043','11':'#d50000',
 };
 
+// インポート対象の色（ミカン=6, ピーコック=7, ラベンダー=1, ブルーベリー=9）
+const ALLOWED_COLOR_IDS = new Set(['6', '7', '1', '9']);
+
 async function importFromGoogle() {
   try {
     const result = await pool.query("SELECT * FROM google_tokens WHERE id=1");
@@ -212,8 +215,8 @@ async function importFromGoogle() {
     );
     for (const dbRow of dbProjects.rows) {
       if (!activeEventIds.has(dbRow.google_event_id)) {
-        await pool.query("DELETE FROM projects WHERE id=$1", [dbRow.id]);
-        console.log(`Deleted project id=${dbRow.id} (Google event removed)`);
+        await pool.query("UPDATE projects SET deleted_at=NOW() WHERE id=$1", [dbRow.id]);
+        console.log(`Soft-deleted project id=${dbRow.id} (Google event removed)`);
         deletedCount++;
       }
     }
@@ -227,6 +230,10 @@ async function importFromGoogle() {
       const usageStart  = new Date(startStr);
       const usageEnd    = new Date(endStr);
       const isAllDay    = !event.start?.dateTime;
+
+      // ─── 色フィルター（ミカン・ピーコック・ラベンダー・ブルーベリーのみ） ───
+      const eventColorId = event.colorId || null;
+      if (!eventColorId || !ALLOWED_COLOR_IDS.has(eventColorId)) continue;
       const memo        = stripHtml(event.description || "");
       const calColor    = calColorMap['bilin.original@gmail.com'] || '#3d57c4';
       const googleColor = event.colorId ? (COLOR_MAP[event.colorId] || calColor) : calColor;
@@ -235,7 +242,7 @@ async function importFromGoogle() {
 
       // 既存チェック
       const existing = await pool.query(
-        "SELECT id, usage_start FROM projects WHERE google_event_id=$1", [event.id]
+        "SELECT id, usage_start FROM projects WHERE google_event_id=$1 AND deleted_at IS NULL", [event.id]
       );
 
       if (existing.rows.length > 0) {
