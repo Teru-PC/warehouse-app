@@ -152,8 +152,11 @@ const COLOR_MAP = {
   '6':'#f4511e','7':'#039be5','8':'#616161','9':'#3f51b5','10':'#0b8043','11':'#d50000',
 };
 
-// インポート対象の色（ミカン=6, ピーコック=7, ラベンダー=1, ブルーベリー=9）
-const ALLOWED_COLOR_IDS = new Set(['6', '7', '1', '9']);
+// ☆または★で終わる案件名のみインポート対象
+function hasStarSuffix(title) {
+  const t = (title || '').trimEnd();
+  return t.endsWith('☆') || t.endsWith('★');
+}
 
 async function importFromGoogle() {
   try {
@@ -209,14 +212,19 @@ async function importFromGoogle() {
 
     let importedCount = 0, updatedCount = 0, deletedCount = 0;
 
-    // ─── Googleで削除されたイベントをDBから削除 ───
+    // ─── Googleで削除 or ☆/★が消えたイベントをDBから削除 ───
+    // ☆/★付きのイベントIDセットを作成
+    const starEventIds = new Set(
+      events.filter(e => hasStarSuffix(e.summary)).map(e => e.id)
+    );
     const dbProjects = await pool.query(
-      "SELECT id, google_event_id FROM projects WHERE google_event_id IS NOT NULL"
+      "SELECT id, google_event_id FROM projects WHERE google_event_id IS NOT NULL AND deleted_at IS NULL"
     );
     for (const dbRow of dbProjects.rows) {
-      if (!activeEventIds.has(dbRow.google_event_id)) {
+      // Google側で削除された、または☆/★が消えた場合
+      if (!starEventIds.has(dbRow.google_event_id)) {
         await pool.query("UPDATE projects SET deleted_at=NOW() WHERE id=$1", [dbRow.id]);
-        console.log(`Soft-deleted project id=${dbRow.id} (Google event removed)`);
+        console.log(`Soft-deleted project id=${dbRow.id} (removed or star suffix gone)`);
         deletedCount++;
       }
     }
@@ -231,9 +239,8 @@ async function importFromGoogle() {
       const usageEnd    = new Date(endStr);
       const isAllDay    = !event.start?.dateTime;
 
-      // ─── 色フィルター（ミカン・ピーコック・ラベンダー・ブルーベリーのみ） ───
-      const eventColorId = event.colorId || null;
-      if (!eventColorId || !ALLOWED_COLOR_IDS.has(eventColorId)) continue;
+      // ─── ☆/★フィルター（案件名の末尾に☆か★があるもののみ） ───
+      if (!hasStarSuffix(event.summary)) continue;
       const memo        = stripHtml(event.description || "");
       const calColor    = calColorMap['bilin.original@gmail.com'] || '#3d57c4';
       const googleColor = event.colorId ? (COLOR_MAP[event.colorId] || calColor) : calColor;
