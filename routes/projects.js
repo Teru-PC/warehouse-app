@@ -39,6 +39,7 @@ router.get("/projects/shipping", auth, async (req, res) => {
       FROM projects p
       WHERE COALESCE(p.hidden_shipping, false) = false
         AND p.deleted_at IS NULL
+        AND COALESCE(p.has_star, false) = true
       ORDER BY p.usage_start ASC NULLS LAST, p.id ASC
     `);
     res.json(result.rows);

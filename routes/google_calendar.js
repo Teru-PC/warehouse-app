@@ -212,19 +212,14 @@ async function importFromGoogle() {
 
     let importedCount = 0, updatedCount = 0, deletedCount = 0;
 
-    // ─── Googleで削除 or ☆/★が消えたイベントをDBから削除 ───
-    // ☆/★付きのイベントIDセットを作成
-    const starEventIds = new Set(
-      events.filter(e => hasStarSuffix(e.summary)).map(e => e.id)
-    );
+    // ─── Googleで削除されたイベントをDBから削除 ───
     const dbProjects = await pool.query(
       "SELECT id, google_event_id FROM projects WHERE google_event_id IS NOT NULL AND deleted_at IS NULL"
     );
     for (const dbRow of dbProjects.rows) {
-      // Google側で削除された、または☆/★が消えた場合
-      if (!starEventIds.has(dbRow.google_event_id)) {
+      if (!activeEventIds.has(dbRow.google_event_id)) {
         await pool.query("UPDATE projects SET deleted_at=NOW() WHERE id=$1", [dbRow.id]);
-        console.log(`Soft-deleted project id=${dbRow.id} (removed or star suffix gone)`);
+        console.log(`Soft-deleted project id=${dbRow.id} (Google event removed)`);
         deletedCount++;
       }
     }
@@ -239,9 +234,8 @@ async function importFromGoogle() {
       const usageEnd    = new Date(endStr);
       const isAllDay    = !event.start?.dateTime;
 
-      // ─── ☆/★フィルター（案件名の末尾に☆か★があるもののみ） ───
-      if (!hasStarSuffix(event.summary)) continue;
       const memo        = stripHtml(event.description || "");
+      const hasStar     = hasStarSuffix(event.summary);
       const calColor    = calColorMap['bilin.original@gmail.com'] || '#3d57c4';
       const googleColor = event.colorId ? (COLOR_MAP[event.colorId] || calColor) : calColor;
       const { active, cxl } = extractInterpreters(memo);
@@ -280,8 +274,9 @@ async function importFromGoogle() {
             memo               = $5,
             color              = $6,
             is_all_day         = $7,
-            hidden_interpreter = $8
-          WHERE id = $9
+            hidden_interpreter = $8,
+            has_star           = $9
+          WHERE id = $10
         `, [
           event.summary || "(無題)",
           event.location || "",
@@ -291,6 +286,7 @@ async function importFromGoogle() {
           googleColor,
           isAllDay,
           hiddenInterpreter,
+          hasStar,
           projectId
         ]);
 
@@ -320,8 +316,8 @@ async function importFromGoogle() {
         const inserted = await pool.query(`
           INSERT INTO projects
             (title, venue, status, usage_start, usage_end, google_event_id,
-             memo, color, is_all_day, hidden_interpreter)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             memo, color, is_all_day, hidden_interpreter, has_star)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
           RETURNING id
         `, [
           event.summary || "(無題)",
@@ -333,7 +329,8 @@ async function importFromGoogle() {
           memo,
           googleColor,
           isAllDay,
-          hiddenInterpreter
+          hiddenInterpreter,
+          hasStar
         ]);
 
         // 通訳者テーブルに登録
