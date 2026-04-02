@@ -154,7 +154,7 @@ const COLOR_MAP = {
 
 // ☆または★で終わる案件名のみインポート対象
 function hasStarSuffix(title) {
-  const t = (title || '').trimEnd();
+  const t = (title || '').replace(/[\s　]+$/g, '');
   return t.endsWith('☆') || t.endsWith('★');
 }
 
