@@ -136,20 +136,15 @@ function renderEquipList(list) {
       row.classList.toggle("checked", cb.checked);
     });
 
-    // 未定チェックボックスの処理
-    const undecidedCb = row.querySelector(".equip-undecided");
-    if (undecidedCb) {
-      undecidedCb.addEventListener("change", () => {
-        qtyInput.disabled = undecidedCb.checked;
-        if (undecidedCb.checked) qtyInput.value = 0;
-        else qtyInput.value = 1;
-      });
-    }
+    
   });
 }
 
 function equipItemHtml(e) {
   const stock = e.is_fixed ? "固定備品" : `在庫: ${e.total_quantity ?? 0}`;
+  const max = e.is_fixed ? 10 : Math.max(10, e.total_quantity ?? 10);
+  let options = `<option value="0">未定</option>`;
+  for (let i = 1; i <= max; i++) options += `<option value="${i}"${i === 1 ? ' selected' : ''}>${i}</option>`;
   return `
     <div class="equip-item" data-id="${e.id}">
       <input type="checkbox" class="equip-cb" data-id="${e.id}" />
@@ -159,11 +154,10 @@ function equipItemHtml(e) {
         <div class="stock">${escapeHtml(stock)}</div>
       </div>
       <div class="qty-wrap">
-          <label style="font-size:13px;display:flex;align-items:center;gap:4px;margin-right:6px">
-            <input type="checkbox" class="equip-undecided" data-id="${e.id}" />未定
-          </label>
-          <input type="number" class="equip-qty" data-id="${e.id}" min="1" value="1" />
-        </div>
+        <select class="equip-qty" data-id="${e.id}" style="padding:5px 6px;font-size:14px;border:1px solid #ccc;border-radius:6px;">
+          ${options}
+        </select>
+      </div>
     </div>
   `;
 }
@@ -244,10 +238,8 @@ async function addCheckedItems(projectId) {
   for (const cb of checked) {
     const equipmentId = Number(cb.dataset.id);
     const qtyInput = document.querySelector(`.equip-qty[data-id="${equipmentId}"]`);
-    const undecidedCb = document.querySelector(`.equip-undecided[data-id="${equipmentId}"]`);
-    const isUndecided = undecidedCb?.checked || false;
-    const qty = isUndecided ? 0 : Number(qtyInput ? qtyInput.value : 1);
-    if (!isUndecided && (!Number.isFinite(qty) || qty <= 0)) {
+    const qty = Number(qtyInput ? qtyInput.value : 1);
+    if (!Number.isFinite(qty) || qty < 0) {
       errors.push(`ID:${equipmentId} 数量が不正`);
       continue;
     }
