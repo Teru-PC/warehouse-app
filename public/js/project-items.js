@@ -123,7 +123,7 @@ function renderEquipList(list) {
   // チェックボックスのイベント
   wrap.querySelectorAll(".equip-item").forEach(row => {
     const cb = row.querySelector("input[type=checkbox]");
-    const qtyInput = row.querySelector("input[type=number]");
+    const qtyInput = row.querySelector("select.equip-qty");
 
     row.addEventListener("click", (ev) => {
       if (ev.target === qtyInput) return; // 数量欄クリックは除外
@@ -182,8 +182,10 @@ async function loadItems(projectId) {
           <div class="name">${escapeHtml(it.equipment_name)}</div>
           <div class="qty-row">
             <span style="color:#6b7280;font-size:13px">数量:</span>
-            <span class="undecided-badge" style="display:${it.quantity === 0 ? 'inline' : 'none'};background:#f59e0b;color:#fff;border-radius:4px;padding:2px 8px;font-size:13px">未定</span>
-            <input type="number" min="1" value="${it.quantity || 1}" data-id="${it.id}" class="qtyEdit" style="display:${it.quantity === 0 ? 'none' : 'inline'}" />" data-id="${it.id}" class="qtyEdit" />
+            <select class="qtyEdit" data-id="${it.id}" style="padding:4px 6px;font-size:14px;border:1px solid #ccc;border-radius:6px;">
+  <option value="0"${it.quantity === 0 ? ' selected' : ''}>未定</option>
+  ${Array.from({length: 99}, (_, i) => i + 1).map(i => `<option value="${i}"${it.quantity === i ? ' selected' : ''}>${i}</option>`).join('')}
+</select>
             <button class="btn btn-sm saveBtn" data-id="${it.id}">保存</button>
           </div>
         </div>
@@ -200,9 +202,7 @@ async function loadItems(projectId) {
         const id = btn.dataset.id;
         const input = wrap.querySelector(`.qtyEdit[data-id="${id}"]`);
         const qty = Number(input.value);
-        const undecidedBadge = wrap.querySelector(`.undecided-badge[data-id="${id}"]`);
-        const isUndecided = undecidedBadge?.style.display !== 'none' && undecidedBadge !== null;
-        if (!isUndecided && (!Number.isFinite(qty) || qty <= 0)) throw new Error("数量が不正です");
+        if (!Number.isFinite(qty) || qty < 0) throw new Error("数量が不正です");
         await api(`/api/project-items/${id}`, { method: "PUT", body: JSON.stringify({ quantity: qty }) });
         await loadItems(projectId);
       } catch (e) { alert(e.message); }
