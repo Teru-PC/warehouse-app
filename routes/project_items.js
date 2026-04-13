@@ -50,8 +50,8 @@ router.post("/project-items", auth, async (req, res) => {
 
     if (!projectId) return res.status(400).json({ message: "project_id is required" });
     if (!equipmentId) return res.status(400).json({ message: "equipment_id is required" });
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      return res.status(400).json({ message: "quantity must be integer > 0" });
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      return res.status(400).json({ message: "quantity must be integer >= 0" });
     }
 
     const result = await pool.query(
@@ -83,8 +83,8 @@ router.put("/project-items/:id", auth, async (req, res) => {
     const quantity = Number(req.body?.quantity);
 
     if (!id) return res.status(400).json({ message: "id is required" });
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      return res.status(400).json({ message: "quantity must be integer > 0" });
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      return res.status(400).json({ message: "quantity must be integer >= 0" });
     }
 
     const result = await pool.query(

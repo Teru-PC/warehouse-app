@@ -135,6 +135,16 @@ function renderEquipList(list) {
     cb.addEventListener("change", () => {
       row.classList.toggle("checked", cb.checked);
     });
+
+    // 未定チェックボックスの処理
+    const undecidedCb = row.querySelector(".equip-undecided");
+    if (undecidedCb) {
+      undecidedCb.addEventListener("change", () => {
+        qtyInput.disabled = undecidedCb.checked;
+        if (undecidedCb.checked) qtyInput.value = 0;
+        else qtyInput.value = 1;
+      });
+    }
   });
 }
 
@@ -149,8 +159,11 @@ function equipItemHtml(e) {
         <div class="stock">${escapeHtml(stock)}</div>
       </div>
       <div class="qty-wrap">
-        <input type="number" class="equip-qty" data-id="${e.id}" min="1" value="1" />
-      </div>
+          <label style="font-size:13px;display:flex;align-items:center;gap:4px;margin-right:6px">
+            <input type="checkbox" class="equip-undecided" data-id="${e.id}" />未定
+          </label>
+          <input type="number" class="equip-qty" data-id="${e.id}" min="1" value="1" />
+        </div>
     </div>
   `;
 }
@@ -175,7 +188,8 @@ async function loadItems(projectId) {
           <div class="name">${escapeHtml(it.equipment_name)}</div>
           <div class="qty-row">
             <span style="color:#6b7280;font-size:13px">数量:</span>
-            <input type="number" min="1" value="${it.quantity}" data-id="${it.id}" class="qtyEdit" />
+            <span class="undecided-badge" style="display:${it.quantity === 0 ? 'inline' : 'none'};background:#f59e0b;color:#fff;border-radius:4px;padding:2px 8px;font-size:13px">未定</span>
+            <input type="number" min="1" value="${it.quantity || 1}" data-id="${it.id}" class="qtyEdit" style="display:${it.quantity === 0 ? 'none' : 'inline'}" />" data-id="${it.id}" class="qtyEdit" />
             <button class="btn btn-sm saveBtn" data-id="${it.id}">保存</button>
           </div>
         </div>
@@ -192,7 +206,9 @@ async function loadItems(projectId) {
         const id = btn.dataset.id;
         const input = wrap.querySelector(`.qtyEdit[data-id="${id}"]`);
         const qty = Number(input.value);
-        if (!Number.isFinite(qty) || qty <= 0) throw new Error("数量が不正です");
+        const undecidedBadge = wrap.querySelector(`.undecided-badge[data-id="${id}"]`);
+        const isUndecided = undecidedBadge?.style.display !== 'none' && undecidedBadge !== null;
+        if (!isUndecided && (!Number.isFinite(qty) || qty <= 0)) throw new Error("数量が不正です");
         await api(`/api/project-items/${id}`, { method: "PUT", body: JSON.stringify({ quantity: qty }) });
         await loadItems(projectId);
       } catch (e) { alert(e.message); }
@@ -228,9 +244,10 @@ async function addCheckedItems(projectId) {
   for (const cb of checked) {
     const equipmentId = Number(cb.dataset.id);
     const qtyInput = document.querySelector(`.equip-qty[data-id="${equipmentId}"]`);
-    const qty = Number(qtyInput ? qtyInput.value : 1);
-
-    if (!Number.isFinite(qty) || qty <= 0) {
+    const undecidedCb = document.querySelector(`.equip-undecided[data-id="${equipmentId}"]`);
+    const isUndecided = undecidedCb?.checked || false;
+    const qty = isUndecided ? 0 : Number(qtyInput ? qtyInput.value : 1);
+    if (!isUndecided && (!Number.isFinite(qty) || qty <= 0)) {
       errors.push(`ID:${equipmentId} 数量が不正`);
       continue;
     }
