@@ -373,7 +373,7 @@ router.post("/google/import", auth, async (req, res) => {
   }
 });
 
-// 毎日午前3時にトークンを事前更新
+// 毎日午前3時にトークンを事前更新（Asia/Tokyo基準）
 cron.schedule("0 3 * * *", async () => {
   console.log("Running scheduled token refresh...");
   try {
@@ -394,12 +394,12 @@ cron.schedule("0 3 * * *", async () => {
   } catch (err) {
     console.error("Scheduled token refresh error:", err.message);
   }
-});
+}, { timezone: "Asia/Tokyo" });
 
 cron.schedule("0 * * * *", async () => {
   console.log("Running scheduled Google Calendar sync...");
   try { await importFromGoogle(); }
   catch (err) { console.error("Scheduled sync error:", err); }
-});
+}, { timezone: "Asia/Tokyo" });
 
 module.exports = router;
