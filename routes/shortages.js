@@ -20,7 +20,6 @@ router.get("/shortages", auth, async (req, res) => {
     if (!proj.rows.length) return res.status(404).json({ message: "Project not found" });
 
     const p = proj.rows[0];
-    // 日単位で判定
     const toJstDate = (d) => {
       const dt = d instanceof Date ? d : new Date(d);
       return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).format(dt);
@@ -37,7 +36,8 @@ router.get("/shortages", auth, async (req, res) => {
     const result = await pool.query(`
       WITH req AS (
         SELECT equipment_id, SUM(quantity)::int AS required
-        FROM project_items WHERE project_id = $1
+        FROM project_items
+        WHERE project_id = $1 AND quantity > 0
         GROUP BY equipment_id
       ),
       used AS (
@@ -45,14 +45,11 @@ router.get("/shortages", auth, async (req, res) => {
         FROM project_items pi
         JOIN projects p ON p.id = pi.project_id
         WHERE p.id <> $1
+          AND pi.quantity > 0
           AND (
-            CASE
-              WHEN 1=1
-                THEN
-                COALESCE(p.shipping_date::date, p.usage_start::date) <= $3::date
-                AND
-                COALESCE(p.return_due_date::date, p.usage_end::date) >= $2::date
-            END
+            COALESCE(p.shipping_date::date, p.usage_start::date) <= $3::date
+            AND
+            COALESCE(p.return_due_date::date, p.usage_end::date) >= $2::date
           )
         GROUP BY pi.equipment_id
       )
@@ -81,14 +78,14 @@ router.get("/shortages", auth, async (req, res) => {
 // ─── 範囲指定モード（カレンダー用）───
 async function handleRangeShortage(req, res) {
   try {
-    const from = req.query.from; // YYYY-MM-DD
-    const to   = req.query.to;   // YYYY-MM-DD
+    const from = req.query.from;
+    const to   = req.query.to;
 
-    // 表示期間内の全案件を取得
     const projResult = await pool.query(`
       SELECT id, shipping_date, return_due_date, usage_start, usage_end
       FROM projects
       WHERE NOT (COALESCE(hidden_shipping, false) = true AND COALESCE(hidden_interpreter, false) = true)
+        AND deleted_at IS NULL
         AND (
           (shipping_date IS NOT NULL AND return_due_date IS NOT NULL
             AND shipping_date::date <= $2::date
@@ -103,17 +100,13 @@ async function handleRangeShortage(req, res) {
     const projects = projResult.rows;
     if (!projects.length) return res.json({ projects: [] });
 
-    // 各案件の不足判定を並列実行
     const results = await Promise.all(projects.map(async (p) => {
-      // 日単位で判定：案件が存在する日付の開始〜終了（JST）
       const toJstDateStr = (d) => {
         const dt = d instanceof Date ? d : new Date(d);
         return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).format(dt);
       };
-      // 案件の日付範囲（発送日優先、なければusage）
       const startDate = p.shipping_date ? toJstDateStr(p.shipping_date) : toJstDateStr(p.usage_start);
       const endDate   = p.return_due_date ? toJstDateStr(p.return_due_date) : toJstDateStr(p.usage_end);
-      // 日の開始（JST 00:00）〜翌日開始（JST 00:00）でtimestamptzに変換
       const rangeStart = `${startDate}T00:00:00+09:00`;
       const rangeEnd   = `${endDate}T23:59:59+09:00`;
 
@@ -121,7 +114,8 @@ async function handleRangeShortage(req, res) {
         const r = await pool.query(`
           WITH req AS (
             SELECT equipment_id, SUM(quantity)::int AS required
-            FROM project_items WHERE project_id = $1
+            FROM project_items
+            WHERE project_id = $1 AND quantity > 0
             GROUP BY equipment_id
           ),
           used AS (
@@ -129,8 +123,8 @@ async function handleRangeShortage(req, res) {
             FROM project_items pi
             JOIN projects p ON p.id = pi.project_id
             WHERE p.id <> $1
+              AND pi.quantity > 0
               AND (
-                -- 日単位で重複チェック（発送日優先、なければusage）
                 COALESCE(p.shipping_date::date, p.usage_start::date) <= $3::date
                 AND
                 COALESCE(p.return_due_date::date, p.usage_end::date) >= $2::date
