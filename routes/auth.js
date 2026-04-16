@@ -4,7 +4,8 @@ const db = require("../db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "warehouse_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET is not set in environment variables");
 
 // ログイン履歴を記録するヘルパー
 async function recordLoginLog(userId, success, ip) {
@@ -69,9 +70,12 @@ router.post("/api/auth/setup-password", async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: "メールとパスワードを入力してください" });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: "パスワードは6文字以上で設定してください" });
-    }
+    if (password.length < 8) {
+  return res.status(400).json({ error: "パスワードは8文字以上で設定してください" });
+}
+if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+  return res.status(400).json({ error: "パスワードは英字と数字を含めてください" });
+}
 
     const result = await db.query(
       "SELECT id, password_hash FROM users WHERE email = $1",
