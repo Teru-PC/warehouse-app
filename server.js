@@ -53,6 +53,7 @@ const projectRoutes     = asRouter(require("./routes/projects"));
 const equipmentRoutes   = asRouter(require("./routes/equipment"));
 const projectItemRoutes = asRouter(require("./routes/project_items"));
 const shortageRoutes    = asRouter(require("./routes/shortages"));
+const quotesRoutes      = asRouter(require("./routes/quotes"));
 const googleCalendarRoutes = require("./routes/google_calendar");
 const adminRoutes       = require("./routes/admin");
 
@@ -72,6 +73,7 @@ app.use("/", googleCalendarRoutes);
 app.use("/", adminRoutes);
 app.use("/api", projectItemRoutes);
 app.use("/api", shortageRoutes);
+app.use("/api/quotes", quotesRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
