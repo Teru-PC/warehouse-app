@@ -227,28 +227,58 @@
             <input type="text" id="fDate" placeholder="2025年3月15日" />
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>場所</label>
+            <input type="text" id="fLocation" placeholder="東京国際フォーラム" />
+          </div>
+        </div>
       </div>
 
-      <!-- 品目一覧 -->
-      <div class="card">
-        <h2>品目一覧</h2>
+      <!-- 通訳品目 -->
+      <div class="card" id="interpCard">
+        <h2>通訳品目</h2>
         <div style="overflow-x:auto;">
           <table class="items-table">
             <thead>
               <tr>
                 <th style="width:40%;">品名</th>
                 <th style="width:12%; text-align:right;">数量</th>
-                <th style="width:12%;">単位</th>
+                <th style="width:10%;">単位</th>
                 <th style="width:18%; text-align:right;">単価（円）</th>
-                <th style="width:16%; text-align:right;">小計（円）</th>
+                <th style="width:14%; text-align:right;">小計（円）</th>
                 <th></th>
               </tr>
             </thead>
-            <tbody id="itemsBody"></tbody>
+            <tbody id="interpBody"></tbody>
           </table>
         </div>
-        <button class="add-item-btn" id="addItemBtn" type="button" style="margin-top:8px;">＋ 行を追加</button>
+        <button class="add-item-btn" id="addInterpBtn" type="button" style="margin-top:8px;">＋ 行を追加</button>
+      </div>
 
+      <!-- 機材品目 -->
+      <div class="card" id="equipCard">
+        <h2>機材品目</h2>
+        <div style="overflow-x:auto;">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:40%;">品名</th>
+                <th style="width:12%; text-align:right;">数量</th>
+                <th style="width:10%;">単位</th>
+                <th style="width:18%; text-align:right;">単価（円）</th>
+                <th style="width:14%; text-align:right;">小計（円）</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="equipBody"></tbody>
+          </table>
+        </div>
+        <button class="add-item-btn" id="addEquipBtn" type="button" style="margin-top:8px;">＋ 行を追加</button>
+      </div>
+
+      <!-- 合計 -->
+      <div class="card" style="padding:12px 16px;">
         <div class="total-row">
           <span class="total-label">合計金額</span>
           <span class="total-amount" id="totalAmount">¥0</span>

@@ -6,21 +6,29 @@
   }
 
   // ── DOM refs ──────────────────────────────────────────────
-  const emailTextEl  = document.getElementById('emailText');
-  const generateBtn  = document.getElementById('generateBtn');
-  const loading      = document.getElementById('loading');
-  const errorArea    = document.getElementById('errorArea');
-  const previewArea  = document.getElementById('previewArea');
+  const emailTextEl   = document.getElementById('emailText');
+  const generateBtn   = document.getElementById('generateBtn');
+  const loading       = document.getElementById('loading');
+  const errorArea     = document.getElementById('errorArea');
+  const previewArea   = document.getElementById('previewArea');
 
-  const fType        = document.getElementById('fType');
-  const fCustomer    = document.getElementById('fCustomer');
-  const fProject     = document.getElementById('fProject');
-  const fDate        = document.getElementById('fDate');
-  const itemsBody    = document.getElementById('itemsBody');
+  const fType         = document.getElementById('fType');
+  const fCustomer     = document.getElementById('fCustomer');
+  const fProject      = document.getElementById('fProject');
+  const fDate         = document.getElementById('fDate');
+  const fLocation     = document.getElementById('fLocation');
+
+  const interpCard    = document.getElementById('interpCard');
+  const interpBody    = document.getElementById('interpBody');
+  const addInterpBtn  = document.getElementById('addInterpBtn');
+
+  const equipCard     = document.getElementById('equipCard');
+  const equipBody     = document.getElementById('equipBody');
+  const addEquipBtn   = document.getElementById('addEquipBtn');
+
   const totalAmountEl = document.getElementById('totalAmount');
-  const addItemBtn   = document.getElementById('addItemBtn');
-  const excelBtn     = document.getElementById('excelBtn');
-  const pdfBtn       = document.getElementById('pdfBtn');
+  const excelBtn      = document.getElementById('excelBtn');
+  const pdfBtn        = document.getElementById('pdfBtn');
 
   // ── 状態 ─────────────────────────────────────────────────
   let quoteData = null;
@@ -30,81 +38,89 @@
     errorArea.innerHTML = `<div class="err">${msg}</div>`;
     errorArea.style.display = 'block';
   }
-
   function clearError() {
     errorArea.style.display = 'none';
     errorArea.innerHTML = '';
   }
-
   function fmt(n) {
-    const num = Number(n) || 0;
-    return '¥' + num.toLocaleString('ja-JP');
+    return '¥' + (Number(n) || 0).toLocaleString('ja-JP');
   }
-
   function calcSubtotal(qty, price) {
     return (Number(qty) || 0) * (Number(price) || 0);
   }
-
-  // ── 品目行を描画 ──────────────────────────────────────────
-  function renderItems(items) {
-    itemsBody.innerHTML = '';
-    (items || []).forEach((item, i) => addItemRow(item, i));
-    recalcTotal();
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
-  function addItemRow(item, index) {
-    item = item || { name: '', quantity: 1, unit: '式', unitPrice: 0, subtotal: 0 };
-    const tr = document.createElement('tr');
-    tr.dataset.index = index !== undefined ? index : itemsBody.rows.length;
+  // ── typeに応じてカード表示切替 ────────────────────────────
+  function updateCardVisibility() {
+    const t = fType.value;
+    if (t === 'interpretation' || t === 'english') {
+      interpCard.style.display = '';
+      equipCard.style.display  = 'none';
+    } else if (t === 'equipment') {
+      interpCard.style.display = 'none';
+      equipCard.style.display  = '';
+    } else {
+      interpCard.style.display = '';
+      equipCard.style.display  = '';
+    }
+    recalcTotal();
+  }
+  fType.addEventListener('change', updateCardVisibility);
 
+  // ── 品目行を追加 ──────────────────────────────────────────
+  function addItemRow(tbody, item) {
+    item = item || { name: '', quantity: 1, unit: '式', unitPrice: 0 };
+    const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="td-name"><input type="text"   value="${esc(item.name)}"      placeholder="品名" /></td>
+      <td class="td-name"><input type="text"   value="${esc(item.name)}"                  placeholder="品名" /></td>
       <td><input type="number" value="${Number(item.quantity) || 1}" min="0" style="width:70px;" /></td>
-      <td><input type="text"   value="${esc(item.unit || '式')}" style="width:50px;" /></td>
-      <td><input type="number" value="${Number(item.unitPrice) || 0}" min="0" step="100" /></td>
-      <td class="td-sub">${fmt(item.subtotal || calcSubtotal(item.quantity, item.unitPrice))}</td>
+      <td><input type="text"   value="${esc(item.unit || '式')}"        style="width:50px;" /></td>
+      <td><input type="number" value="${Number(item.unitPrice) || 0}"  min="0" step="100" /></td>
+      <td class="td-sub">${fmt(calcSubtotal(item.quantity, item.unitPrice))}</td>
       <td class="td-del"><button class="del-btn" type="button" title="削除">×</button></td>
     `;
-
-    // 数量・単価変更で小計を更新
-    const [nameIn, qtyIn, unitIn, priceIn] = tr.querySelectorAll('input');
+    const inputs = tr.querySelectorAll('input');
+    const qtyIn   = inputs[1];
+    const priceIn = inputs[3];
     function updateSub() {
-      const sub = calcSubtotal(qtyIn.value, priceIn.value);
-      tr.querySelector('.td-sub').textContent = fmt(sub);
+      tr.querySelector('.td-sub').textContent = fmt(calcSubtotal(qtyIn.value, priceIn.value));
       recalcTotal();
     }
     qtyIn.addEventListener('input', updateSub);
     priceIn.addEventListener('input', updateSub);
-
-    // 削除ボタン
-    tr.querySelector('.del-btn').addEventListener('click', () => {
-      tr.remove();
-      recalcTotal();
-    });
-
-    itemsBody.appendChild(tr);
+    tr.querySelector('.del-btn').addEventListener('click', () => { tr.remove(); recalcTotal(); });
+    tbody.appendChild(tr);
   }
 
+  function renderTable(tbody, items) {
+    tbody.innerHTML = '';
+    (items || []).forEach(item => addItemRow(tbody, item));
+  }
+
+  // ── 合計を再計算 ──────────────────────────────────────────
   function recalcTotal() {
     let total = 0;
-    itemsBody.querySelectorAll('tr').forEach(tr => {
-      const inputs = tr.querySelectorAll('input');
-      if (inputs.length < 4) return;
-      const sub = calcSubtotal(inputs[1].value, inputs[3].value);
-      tr.querySelector('.td-sub').textContent = fmt(sub);
-      total += sub;
-    });
+    function sumTable(tbody) {
+      tbody.querySelectorAll('tr').forEach(tr => {
+        const inputs = tr.querySelectorAll('input');
+        if (inputs.length < 4) return;
+        const sub = calcSubtotal(inputs[1].value, inputs[3].value);
+        tr.querySelector('.td-sub').textContent = fmt(sub);
+        total += sub;
+      });
+    }
+    if (interpCard.style.display !== 'none') sumTable(interpBody);
+    if (equipCard.style.display  !== 'none') sumTable(equipBody);
     totalAmountEl.textContent = fmt(total);
   }
 
-  function esc(str) {
-    return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  }
-
-  // ── 現在の入力値を収集 ───────────────────────────────────
-  function collectData() {
+  // ── テーブルから品目を収集 ───────────────────────────────
+  function collectTableItems(tbody) {
     const items = [];
-    itemsBody.querySelectorAll('tr').forEach(tr => {
+    tbody.querySelectorAll('tr').forEach(tr => {
       const inputs = tr.querySelectorAll('input');
       if (inputs.length < 4) return;
       items.push({
@@ -115,25 +131,37 @@
         subtotal:  calcSubtotal(inputs[1].value, inputs[3].value),
       });
     });
-    const total = items.reduce((s, it) => s + it.subtotal, 0);
+    return items;
+  }
+
+  function collectData() {
+    const interpretationItems = collectTableItems(interpBody);
+    const equipmentItems      = collectTableItems(equipBody);
+    const allItems = interpretationItems.concat(equipmentItems);
     return {
-      type:         fType.value,
-      customerName: fCustomer.value,
-      projectName:  fProject.value,
-      eventDate:    fDate.value,
-      items,
-      totalAmount:  total,
-      rawEmail:     emailTextEl.value,
+      type:               fType.value,
+      customerName:       fCustomer.value,
+      projectName:        fProject.value,
+      eventDate:          fDate.value,
+      location:           fLocation ? fLocation.value : ((quoteData && quoteData.location) || ''),
+      interpretationItems,
+      equipmentItems,
+      items:              allItems,
+      totalAmount:        allItems.reduce((s, it) => s + it.subtotal, 0),
+      rawEmail:           emailTextEl.value,
+      discount:           Number((quoteData && quoteData.discount)      || 0),
+      numDays:            Math.max(1, Number((quoteData && quoteData.numDays)      || 1)),
+      interpreters:       Math.max(1, Number((quoteData && quoteData.interpreters) || 1)),
+      outsideTokyo:       Boolean(quoteData && quoteData.outsideTokyo),
+      isTaxExempt:        Boolean(quoteData && quoteData.isTaxExempt),
+      languages:          (quoteData && quoteData.languages) || [],
     };
   }
 
   // ── 生成ボタン ────────────────────────────────────────────
   generateBtn.addEventListener('click', async () => {
     const emailText = emailTextEl.value.trim();
-    if (!emailText) {
-      showError('メール本文を入力してください。');
-      return;
-    }
+    if (!emailText) { showError('メール本文を入力してください。'); return; }
     clearError();
     generateBtn.disabled = true;
     loading.classList.add('show');
@@ -142,48 +170,27 @@
     try {
       const res = await fetch('/api/quotes/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ emailText }),
       });
-
       if (res.status === 401) { location.href = '/login.html'; return; }
-
       const data = await res.json();
-      if (!res.ok) {
-        showError(data.message || '解析に失敗しました。');
-        return;
-      }
+      if (!res.ok) { showError(data.message || '解析に失敗しました。'); return; }
 
       quoteData = data;
-      console.log('quoteData:', data);
-      console.log('interpretationItems:', data.interpretationItems);
-      console.log('equipmentItems:', data.equipmentItems);
 
-      // フォームに反映
-      const typeMap = { interpretation: 'interpretation', equipment: 'equipment', both: 'both', english: 'english' };
-      fType.value     = typeMap[data.type] || 'both';
+      fType.value    = data.type        || 'both';
       fCustomer.value = data.customerName || '';
       fProject.value  = data.projectName  || '';
       fDate.value     = data.eventDate    || '';
+      if (fLocation) fLocation.value = data.location || '';
 
-      // typeに応じて品目一覧に表示する配列を構築
-      let previewItems = [];
-      if (data.type === 'equipment') {
-        previewItems = data.equipmentItems || [];
-      } else if (data.type === 'interpretation' || data.type === 'english') {
-        previewItems = data.interpretationItems || [];
-      } else {
-        // both: 通訳項目→機材項目の順で結合
-        previewItems = (data.interpretationItems || []).concat(data.equipmentItems || []);
-      }
-      renderItems(previewItems);
+      renderTable(interpBody, data.interpretationItems || []);
+      renderTable(equipBody,  data.equipmentItems      || []);
+      updateCardVisibility();
 
       previewArea.style.display = 'block';
       previewArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
     } catch (err) {
       showError('通信エラーが発生しました: ' + err.message);
     } finally {
@@ -193,56 +200,53 @@
   });
 
   // ── 行追加ボタン ──────────────────────────────────────────
-  addItemBtn.addEventListener('click', () => {
-    addItemRow(null);
-  });
+  addInterpBtn.addEventListener('click', () => addItemRow(interpBody, null));
+  addEquipBtn.addEventListener('click',  () => addItemRow(equipBody,  null));
 
-  // ── Excel ダウンロード ────────────────────────────────────
-  excelBtn.addEventListener('click', () => {
+  // ── Excel ダウンロード（サーバーサイド xlsx）─────────────
+  excelBtn.addEventListener('click', async () => {
     const d = collectData();
-    const typeLabel = { interpretation: '通訳', equipment: '機材', both: '通訳＋機材', english: 'English' }[d.type] || d.type;
-
-    const rows = [
-      ['見積書'],
-      ['種類', typeLabel],
-      ['顧客名', d.customerName],
-      ['案件名', d.projectName],
-      ['日程',   d.eventDate],
-      [],
-      ['品名', '数量', '単位', '単価', '小計'],
-      ...d.items.map(it => [it.name, it.quantity, it.unit, it.unitPrice, it.subtotal]),
-      [],
-      ['', '', '', '合計', d.totalAmount],
-    ];
-
-    const tsv = rows.map(r => r.map(c => String(c ?? '').replace(/\t/g, ' ')).join('\t')).join('\n');
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + tsv], { type: 'text/tab-separated-values;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `見積書_${d.customerName || '未設定'}_${d.eventDate || ''}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      excelBtn.disabled = true;
+      const res = await fetch('/api/quotes/export/excel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(d),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showError('Excel生成に失敗しました: ' + (err.message || res.status));
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `見積書_${d.customerName || '未設定'}_${d.eventDate || ''}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError('通信エラーが発生しました: ' + err.message);
+    } finally {
+      excelBtn.disabled = false;
+    }
   });
 
   // ── PDF ダウンロード ──────────────────────────────────────
   pdfBtn.addEventListener('click', () => {
-    const d             = collectData();
-    const location      = (quoteData && quoteData.location)      || '';
-    const interpreters  = Math.max(1, Number((quoteData && quoteData.interpreters) || 1));
-    const discount      = Math.max(0, Number((quoteData && quoteData.discount)     || 0));
-    const isOutsideTokyo = Boolean(quoteData && quoteData.outsideTokyo);
-    const interpItems   = (quoteData && quoteData.interpretationItems) || d.items;
-    const equipItems    = (quoteData && quoteData.equipmentItems)      || d.items;
-    const numDays       = Math.max(1, Number((quoteData && quoteData.numDays) || 1));
+    const d            = collectData();
+    const locStr       = d.location;
+    const interpreters = d.interpreters;
+    const discount     = d.discount;
+    const isOutsideTokyo = d.outsideTokyo;
+    const interpItems  = d.interpretationItems;
+    const equipItems   = d.equipmentItems;
+    const numDays      = d.numDays;
+    const isTaxExempt  = d.isTaxExempt ||
+      /国連|UN\b|UNESCO|WHO|UNDP|UNICEF|WFP|ILO|IMF|OECD|世界銀行/i.test(d.customerName || '');
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
-
-    const TAX_EXEMPT = /国連|UN\b|UNESCO|WHO|UNDP|UNICEF|WFP|ILO|IMF|OECD|世界銀行/i;
-    const isTaxExempt = TAX_EXEMPT.test(d.customerName || '') ||
-                        Boolean(quoteData && quoteData.isTaxExempt);
 
     function fmtQty(it) {
       const unit = (it.unit || '').trim();
@@ -260,8 +264,6 @@
       return `${qty}${esc(unit)}`;
     }
 
-    // ── ヘッダー共通 ──────────────────────────────────────────
-    // ロゴ: public/images/logo.png にロゴ画像ファイルを配置してください
     function headerHTML() {
       const customer = d.customerName
         ? esc(d.customerName) + '　御中'
@@ -280,11 +282,9 @@
         </div>`;
     }
 
-    // ── 件名行 ───────────────────────────────────────────────
     function subjectHTML(pageType) {
-      const langs = (quoteData && Array.isArray(quoteData.languages) && quoteData.languages.length > 0)
-        ? quoteData.languages.join('・')
-        : '';
+      const langs = (Array.isArray(d.languages) && d.languages.length > 0)
+        ? d.languages.join('・') : '';
       let text;
       if (pageType === 'equipment') {
         text = `同時通訳機器レンタル（${d.projectName ? esc(d.projectName) : ''}）業務`;
@@ -296,11 +296,11 @@
       }
       return `
         <div class="subject-row">
-          <span class="subject-label">件　名　：</span><span class="subject-text">${text}</span>
+          <span class="subject-label">件　名　：</span>
+          <span class="subject-text">${text}</span>
         </div>`;
     }
 
-    // ── ページ1: 通訳見積書 ──────────────────────────────────
     function buildInterpPage() {
       let rowNum = 1;
       const itemRows = interpItems.map(it => {
@@ -316,27 +316,25 @@
 
       const interpFeeTotal = interpItems.reduce((s, it) => s + it.subtotal, 0);
       const mgmtFee        = Math.round(interpFeeTotal * 0.1);
+      const travelUnit     = 28000;
+      const dailyUnit      = 8000;
+      const travelTotal    = travelUnit * interpreters * numDays;
+      const dailyTotal     = dailyUnit  * interpreters * numDays;
+      const qtyStr         = `${interpreters}名×${numDays}日`;
+      const mgmtNum        = rowNum++;
 
-      const travelUnit  = 28000;
-      const dailyUnit   = 8000;
-      const travelTotal = travelUnit * interpreters * numDays;
-      const dailyTotal  = dailyUnit  * interpreters * numDays;
-      const qtyStr      = `${interpreters}名×${numDays}日`;
-
-      const mgmtNum = rowNum++;
       let travelRows = '';
       if (isOutsideTokyo) {
-        const travelNum = rowNum++;
-        const dailyNum  = rowNum++;
+        const tN = rowNum++, dN = rowNum++;
         travelRows = `
           <tr>
-            <td class="td-name">${travelNum})&ensp;移動拘束費</td>
+            <td class="td-name">${tN})&ensp;移動拘束費</td>
             <td class="td-price">${fmt(travelUnit)}</td>
             <td class="td-qty">${qtyStr}</td>
             <td class="td-sub">${fmt(travelTotal)}</td>
           </tr>
           <tr>
-            <td class="td-name">${dailyNum})&ensp;日当</td>
+            <td class="td-name">${dN})&ensp;日当</td>
             <td class="td-price">${fmt(dailyUnit)}</td>
             <td class="td-qty">${qtyStr}</td>
             <td class="td-sub">${fmt(dailyTotal)}</td>
@@ -399,15 +397,13 @@
       </div>`;
     }
 
-    // ── ページ2: 機材見積書（サマリー）──────────────────────
     function buildEquipSummaryPage() {
-      const equipTotal      = equipItems.reduce((s, it) => {
-        const qty = Math.max(1, Number(it.quantity) || 1);
-        return s + qty * numDays * (Number(it.unitPrice) || 0);
+      const equipTotal = equipItems.reduce((s, it) => {
+        return s + Math.max(1, Number(it.quantity) || 1) * numDays * (Number(it.unitPrice) || 0);
       }, 0);
       const discountedTotal = Math.max(0, equipTotal - discount);
-      const tax             = isTaxExempt ? 0 : Math.round(discountedTotal * 0.1);
-      const grand           = discountedTotal + tax;
+      const tax   = isTaxExempt ? 0 : Math.round(discountedTotal * 0.1);
+      const grand = discountedTotal + tax;
 
       return `
       <div class="page">
@@ -430,24 +426,9 @@
               <td class="td-qty">一式</td>
               <td class="td-sub">${fmt(equipTotal)}</td>
             </tr>
-            <tr>
-              <td class="td-name">2)</td>
-              <td class="td-price"></td>
-              <td class="td-qty"></td>
-              <td class="td-sub"></td>
-            </tr>
-            <tr>
-              <td class="td-name">3)</td>
-              <td class="td-price"></td>
-              <td class="td-qty"></td>
-              <td class="td-sub"></td>
-            </tr>
-            <tr>
-              <td class="td-name">4)</td>
-              <td class="td-price"></td>
-              <td class="td-qty"></td>
-              <td class="td-sub"></td>
-            </tr>
+            <tr><td class="td-name">2)</td><td></td><td></td><td></td></tr>
+            <tr><td class="td-name">3)</td><td></td><td></td><td></td></tr>
+            <tr><td class="td-name">4)</td><td></td><td></td><td></td></tr>
             <tr>
               <td class="td-name">お値引き</td>
               <td class="td-price"></td>
@@ -469,20 +450,14 @@
           ${!isTaxExempt ? '<p class="star-note">＊は消費税額を含む金額であることを示します</p>' : ''}
           <table class="notes-tbl">
             <tr><td>納入日</td><td>：</td><td>${d.eventDate ? esc(d.eventDate) : '「同時通訳機器レンタル費用など明細」参照'}</td></tr>
-            <tr><td>納入場所</td><td>：</td><td>${location ? esc(location) : '「同時通訳機器レンタル費用など明細」参照'}</td></tr>
+            <tr><td>納入場所</td><td>：</td><td>${locStr ? esc(locStr) : '「同時通訳機器レンタル費用など明細」参照'}</td></tr>
             <tr><td>お支払</td><td>：</td><td>請求日より30日以内銀行振込</td></tr>
           </table>
         </div>
       </div>`;
     }
 
-    // ── ページ3: 機器明細書 ──────────────────────────────────
     function buildEquipDetailPage() {
-      const equipTotal = equipItems.reduce((s, it) => {
-        const qty = Math.max(1, Number(it.quantity) || 1);
-        return s + qty * numDays * (Number(it.unitPrice) || 0);
-      }, 0);
-
       const detailRows = equipItems.map(it => {
         const qty    = Math.max(1, Number(it.quantity) || 1);
         const amount = qty * numDays * (Number(it.unitPrice) || 0);
@@ -497,35 +472,21 @@
         </tr>`;
       }).join('');
 
+      const equipTotal = equipItems.reduce((s, it) => {
+        return s + Math.max(1, Number(it.quantity) || 1) * numDays * (Number(it.unitPrice) || 0);
+      }, 0);
+
       return `
       <div class="page">
         ${headerHTML()}
         <div class="detail-title-box">同時通訳装置レンタル費用明細</div>
         <table class="info-tbl">
-          <tr>
-            <td class="info-label">会　議　名</td><td class="info-sep">：</td>
-            <td class="info-val">${d.projectName ? esc(d.projectName) : ''}</td>
-          </tr>
-          <tr>
-            <td class="info-label">年　月　日</td><td class="info-sep">：</td>
-            <td class="info-val">${d.eventDate ? esc(d.eventDate) : ''}</td>
-          </tr>
-          <tr>
-            <td class="info-label">場　　　所</td><td class="info-sep">：</td>
-            <td class="info-val">${location ? esc(location) : ''}</td>
-          </tr>
-          <tr>
-            <td class="info-label">設　　　営</td><td class="info-sep">：</td>
-            <td class="info-val">前日</td>
-          </tr>
-          <tr>
-            <td class="info-label">撤　　　去</td><td class="info-sep">：</td>
-            <td class="info-val">終了後</td>
-          </tr>
-          <tr>
-            <td class="info-label">録　　　音</td><td class="info-sep">：</td>
-            <td class="info-val">無</td>
-          </tr>
+          <tr><td class="info-label">会　議　名</td><td class="info-sep">：</td><td class="info-val">${d.projectName ? esc(d.projectName) : ''}</td></tr>
+          <tr><td class="info-label">年　月　日</td><td class="info-sep">：</td><td class="info-val">${d.eventDate ? esc(d.eventDate) : ''}</td></tr>
+          <tr><td class="info-label">場　　　所</td><td class="info-sep">：</td><td class="info-val">${locStr ? esc(locStr) : ''}</td></tr>
+          <tr><td class="info-label">設　　　営</td><td class="info-sep">：</td><td class="info-val">前日</td></tr>
+          <tr><td class="info-label">撤　　　去</td><td class="info-sep">：</td><td class="info-val">終了後</td></tr>
+          <tr><td class="info-label">録　　　音</td><td class="info-sep">：</td><td class="info-val">無</td></tr>
         </table>
         <table class="items-tbl detail-tbl">
           <thead>
@@ -554,7 +515,6 @@
       </div>`;
     }
 
-    // ── ページ構成 ────────────────────────────────────────────
     let bodyContent;
     if (d.type === 'both') {
       bodyContent = buildInterpPage() + buildEquipSummaryPage() + buildEquipDetailPage();
@@ -564,84 +524,36 @@
       bodyContent = buildInterpPage();
     }
 
-    // ── CSS ──────────────────────────────────────────────────
     const css = `
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         font-family: "MS Mincho", "Yu Mincho", "Hiragino Mincho ProN", "HiraMinProN-W3", serif;
-        font-size: 10.5pt;
-        color: #000;
-        background: #fff;
+        font-size: 10.5pt; color: #000; background: #fff;
       }
-      .page {
-        width: 210mm;
-        min-height: 297mm;
-        padding: 40mm 25mm;
-      }
-      /* 日付 */
+      .page { width: 210mm; min-height: 297mm; padding: 40mm 25mm; }
       .date-row { text-align: right; margin-bottom: 16px; font-size: 10pt; }
-      /* 宛先・自社情報 */
-      .addr-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        min-height: 120px;
-        margin-bottom: 32px;
-      }
+      .addr-row { display: flex; justify-content: space-between; align-items: flex-start; min-height: 120px; margin-bottom: 32px; }
       .customer-block { font-size: 14pt; font-weight: bold; }
       .sender-block   { text-align: right; line-height: 1.8; font-size: 9pt; }
-      /* タイトル */
-      .main-title {
-        text-align: center;
-        font-size: 20pt;
-        font-weight: bold;
-        margin-top: 30px;
-        margin-bottom: 15px;
-        letter-spacing: 0.15em;
-      }
-      .sub-title { text-align: center; font-size: 11pt; margin: 4px 0 16px; }
-      /* 機器明細書 枠付きタイトル */
-      .detail-title-box {
-        text-align: center; font-size: 14pt; font-weight: bold;
-        border: 2px solid #000; padding: 7px 0; margin: 30px 0 15px;
-        letter-spacing: 0.05em;
-      }
-      /* 機器明細書 情報テーブル（枠線あり） */
+      .main-title { text-align: center; font-size: 20pt; font-weight: bold; margin-top: 30px; margin-bottom: 15px; letter-spacing: 0.15em; }
+      .detail-title-box { text-align: center; font-size: 14pt; font-weight: bold; border: 2px solid #000; padding: 7px 0; margin: 30px 0 15px; letter-spacing: 0.05em; }
       .info-tbl { border-collapse: collapse; width: auto; margin: 0 0 15px; font-size: 10pt; }
       .info-tbl td { border: 1px solid #000; padding: 3px 8px; text-align: left; }
       .info-label { font-weight: bold; white-space: nowrap; }
       .info-sep   { text-align: left; white-space: nowrap; }
       .info-val   { min-width: 200px; }
-      /* 件名 */
-      .subject-row {
-        display: flex;
-        justify-content: center;
-        align-items: baseline;
-        font-size: 10.5pt;
-        margin-top: 0;
-        margin-bottom: 20px;
-      }
+      .subject-row { display: flex; justify-content: center; align-items: baseline; font-size: 10.5pt; margin-top: 0; margin-bottom: 20px; }
       .subject-label { white-space: nowrap; }
       .subject-text  { border-bottom: 1px solid #000; padding: 0 16px 2px; min-width: 60px; }
-      /* 明細メタ情報（機器明細書） */
-      .meta-tbl { border-collapse: collapse; width: 100%; margin-bottom: 10px; font-size: 10pt; }
-      .meta-tbl td { padding: 2px 6px; vertical-align: top; }
-      .meta-label { white-space: nowrap; font-weight: bold; }
-      .meta-val   { min-width: 100px; }
-      /* 項目テーブル（共通） */
       .items-tbl { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 0; }
-      .items-tbl th, .items-tbl td {
-        border: 1px solid #000;
-        padding: 5px 8px;
-        font-size: 10pt;
-      }
+      .items-tbl th, .items-tbl td { border: 1px solid #000; padding: 5px 8px; font-size: 10pt; }
       .items-tbl th { text-align: center; font-weight: bold; }
-      /* 4列レイアウト（通訳・機材サマリー） */
       .th-name  { width: 50%; }
       .th-price { width: 15%; }
       .th-qty   { width: 15%; }
       .th-sub   { width: 20%; }
-      /* 6列レイアウト（機器明細） */
+      .th-center { text-align: center; }
+      .th-right  { text-align: right; }
       .detail-tbl th:nth-child(1) { width: 30%; }
       .detail-tbl th:nth-child(2) { width: 10%; }
       .detail-tbl th:nth-child(3) { width: 10%; }
@@ -650,25 +562,20 @@
       .detail-tbl th:nth-child(6) { width: 10%; }
       .detail-tbl th, .detail-tbl td { padding: 4px 6px; white-space: nowrap; }
       .detail-tbl .td-name { white-space: normal; }
-      /* 空行 */
       .empty-row td { height: 24px; }
-      /* 明細合計行 */
       .detail-total-row td { border-top: 2px solid #000; font-weight: bold; font-size: 11pt; }
-      /* セル揃え */
       .td-name   { text-align: left; }
       .td-price  { text-align: right; }
       .td-qty    { text-align: right; white-space: nowrap; min-width: 100px; font-size: 0.9em; }
       .td-sub    { text-align: right; }
       .td-center { text-align: center; }
       .td-right  { text-align: right; }
-      /* 合計エリア */
       .totals-wrap { margin: 10px 0 16px; }
       .totals-tbl  { border-collapse: collapse; width: 35%; margin-left: auto; }
       .totals-tbl td { border: 1px solid #000; padding: 4px 10px; font-size: 10pt; }
       .totals-tbl .tl { text-align: left; white-space: nowrap; }
       .totals-tbl .tr { text-align: right; }
       .grand-row td   { font-weight: bold; font-size: 11pt; }
-      /* 注意書き */
       .notes-block { margin-top: 20px; font-size: 9pt; }
       .star-note   { margin-bottom: 8px; }
       .notes-tbl   { border-collapse: collapse; margin-bottom: 10px; font-size: 0.85em; }
@@ -677,34 +584,18 @@
       .notes-list  { list-style: none; padding-left: 0; }
       .notes-list li { margin-bottom: 3px; }
       .notes-list li::before { content: "・"; }
-      .equip-notes li::before { content: "※ "; }
-      /* 印刷設定 */
-      @page {
-        size: A4;
-        margin: 0;
-      }
+      @page { size: A4; margin: 0; }
       @media print {
         body { margin: 25mm 20mm 20mm 20mm; }
-        .page {
-          padding: 0;
-          width: auto;
-          min-height: auto;
-          page-break-after: always;
-        }
+        .page { padding: 0; width: auto; min-height: auto; page-break-after: always; }
         .page:last-child { page-break-after: avoid; }
       }
     `;
 
     const html = `<!doctype html>
 <html lang="ja">
-<head>
-<meta charset="utf-8">
-<title></title>
-<style>${css}</style>
-</head>
-<body>
-${bodyContent}
-</body>
+<head><meta charset="utf-8"><title></title><style>${css}</style></head>
+<body>${bodyContent}</body>
 </html>`;
 
     const win = window.open('', '_blank');
@@ -712,11 +603,8 @@ ${bodyContent}
       win.document.write(html);
       win.document.close();
       win.document.title = '';
-      if (win.document.readyState === 'complete') {
-        win.print();
-      } else {
-        win.addEventListener('load', () => win.print());
-      }
+      if (win.document.readyState === 'complete') win.print();
+      else win.addEventListener('load', () => win.print());
     } else {
       showError('ポップアップがブロックされました。ブラウザの設定を確認してください。');
     }
