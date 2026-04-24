@@ -219,7 +219,7 @@
   }
 
   async function fetchProjects() {
-    const token = localStorage.getItem('token') || '';
+    const token = (window.authUtils && window.authUtils.getToken()) || localStorage.getItem('token') || '';
     const res = await fetch("/api/projects", {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
     });
@@ -234,7 +234,7 @@
     try {
       const from = days[0];
       const to   = days[days.length - 1];
-      const token = localStorage.getItem('token') || '';
+      const token = (window.authUtils && window.authUtils.getToken()) || localStorage.getItem('token') || '';
       const res = await fetch(`/api/shortages?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
         { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
       if (!res.ok) return new Map();
@@ -277,71 +277,15 @@
     return result;
   }
 
+  // renderProjects内のクリックイベントと共有するフラグ
+  let suppressNextClick = false;
+
   function lightenColor(hex, amount) {
     const num = parseInt(hex.replace('#', ''), 16);
     const r = Math.min(255, (num >> 16) + amount);
     const g = Math.min(255, ((num >> 8) & 0xff) + amount);
     const b = Math.min(255, (num & 0xff) + amount);
     return `rgb(${r},${g},${b})`;
-  }
-
-  function renderAllDayProjects(projects, visibleDays) {
-    document.querySelectorAll(".cal-allday-item").forEach(el => el.remove());
-
-    // 列幅を取得
-    const colW = (() => {
-      const head = document.querySelector('.cal-day-head');
-      return head ? head.getBoundingClientRect().width : 120;
-    })();
-
-    for (const p of projects) {
-      if (!p.is_all_day) continue;
-      const startIso = p.usage_start_at || p.usage_start;
-      const endIso   = p.usage_end_at   || p.usage_end;
-      if (!startIso) continue;
-
-      const startDayKey = jstDayKeyFromUtcMs(new Date(startIso).getTime());
-      // 終日イベントのendは翌日0:00なので1ms引く
-      const endDayKey = endIso
-        ? jstDayKeyFromUtcMs(new Date(new Date(endIso).getTime() - 1).getTime())
-        : startDayKey;
-
-      // 表示範囲内の開始・終了日
-      const dispStart = visibleDays.find(d => d >= startDayKey);
-      if (!dispStart) continue;
-      const dispEnd = [...visibleDays].reverse().find(d => d <= endDayKey) || dispStart;
-
-      const startIdx = visibleDays.indexOf(dispStart);
-      const endIdx   = visibleDays.indexOf(dispEnd);
-      const spanDays = Math.max(1, endIdx - startIdx + 1);
-
-      const startArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${dispStart}"]`);
-      if (!startArea) continue;
-
-      const btn = document.createElement('div');
-      btn.className = 'cal-allday-item';
-      if (p.color) {
-        btn.style.background = lightenColor(p.color, 60);
-        btn.style.borderColor = p.color;
-        btn.style.borderWidth = '2px';
-        btn.style.borderStyle = 'solid';
-        btn.style.color = '#333';
-      }
-      btn.style.width = `${colW * spanDays - 8}px`;
-      btn.style.overflow = 'hidden';
-      btn.style.textOverflow = 'ellipsis';
-      btn.style.whiteSpace = 'nowrap';
-      btn.style.boxSizing = 'border-box';
-      btn.style.position = 'relative';
-      btn.style.zIndex = '5';
-      btn.textContent = p.title || '(無題)';
-      btn.addEventListener('click', ev => {
-        ev.preventDefault(); ev.stopPropagation();
-        const ret = encodeURIComponent(location.pathname + location.search);
-        location.href = `/project-edit.html?id=${p.id}&return=${ret}`;
-      });
-      startArea.appendChild(btn);
-    }
   }
 
   function renderProjects(projects, visibleDays, shortageMap = new Map()) {
@@ -532,27 +476,6 @@
     });
   }
 
-  function renderShipBtns(projects) {
-    // 発送ボタンはカレンダーに表示しない
-    return;
-    for (const p of projects) {
-      if (!p.shipping_date) continue;
-      const shipDayKey = p.shipping_date.slice(0, 10);
-      const btnArea = document.querySelector(`.cal-ship-btn-area[data-day-btns="${shipDayKey}"]`);
-      if (!btnArea) continue;
-      const startParts = partsFromDateInJst(new Date(p.usage_start_at || p.usage_start), false);
-      const btn = document.createElement('button');
-      btn.className = 'cal-ship-btn';
-      btn.textContent = `【発送】${p.title || ''} ${startParts.mo}/${startParts.d}`;
-      btn.addEventListener('click', ev => {
-        ev.preventDefault(); ev.stopPropagation();
-        const ret = encodeURIComponent(location.pathname + location.search);
-        location.href = `/checklist.html?project_id=${p.id}&return=${ret}`;
-      });
-      btnArea.appendChild(btn);
-    }
-  }
-
   function getBaseDayKey() {
     if (baseDateStr && /^\d{4}-\d{2}-\d{2}$/.test(baseDateStr)) return baseDateStr;
     return jstTodayKey();
@@ -589,7 +512,6 @@
         let dragMoved = false;
         let longPressTimer = null;
         let pendingProjectClick = null;
-        let suppressNextClick = false;
 
         gridScroll.style.userSelect = 'none';
 
@@ -683,7 +605,6 @@
 
       const [projects, shortageMap] = await Promise.all([fetchProjects(), fetchShortages(days)]);
       renderProjects(projects, days, shortageMap);
-      renderShipBtns(projects);
       renderAllDayProjects(projects, days);
 
       // 終日エリア高さ調整後にlayout再計算

@@ -128,8 +128,17 @@ router.post("/projects", auth, async (req, res) => {
       usage_start_at, usage_end_at, usage_start, usage_end
     } = req.body || {};
 
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ message: "タイトルは必須です" });
+    }
     const s = new Date(usage_start_at ?? usage_start);
     const e = new Date(usage_end_at ?? usage_end);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) {
+      return res.status(400).json({ message: "日時が不正です" });
+    }
+    if (s >= e) {
+      return res.status(400).json({ message: "開始日時は終了日時より前にしてください" });
+    }
 
     const result = await pool.query(`
       INSERT INTO projects
@@ -166,7 +175,9 @@ router.patch("/projects/:id/confirm", auth, async (req, res) => {
     const shortage = await client.query(`
       WITH req AS (
         SELECT equipment_id, SUM(quantity) AS required
-        FROM project_items WHERE project_id=$1 GROUP BY equipment_id
+        FROM project_items
+        WHERE project_id=$1 AND quantity > 0
+        GROUP BY equipment_id
       ),
       used AS (
         SELECT pi.equipment_id, SUM(pi.quantity) AS used
@@ -174,6 +185,7 @@ router.patch("/projects/:id/confirm", auth, async (req, res) => {
         JOIN projects p ON p.id=pi.project_id
         WHERE p.status='confirmed' AND p.id<>$1
           AND p.usage_start < $2 AND p.usage_end > $3
+          AND pi.quantity > 0
         GROUP BY pi.equipment_id
       )
       SELECT e.name, r.required, e.total_quantity,
@@ -260,14 +272,21 @@ router.delete("/projects/:id/hide-interpreter", auth, async (req, res) => {
 });
 
 /**
- * 完全削除（案件編集画面から：両方hidden）
+ * 完全削除（案件編集画面から）
  */
 router.delete("/projects/:id", auth, async (req, res) => {
-  await pool.query(
-    "DELETE FROM projects WHERE id=$1",
-    [req.params.id]
-  );
-  res.json({ success: true });
+  try {
+    const result = await pool.query(
+      "DELETE FROM projects WHERE id=$1 RETURNING id",
+      [req.params.id]
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "not found" });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 /**
@@ -316,7 +335,13 @@ router.get("/trash", auth, async (req, res) => {
  */
 router.delete("/trash/:id", auth, async (req, res) => {
   try {
-    await pool.query("DELETE FROM deleted_projects WHERE id=$1", [req.params.id]);
+    const result = await pool.query(
+      "DELETE FROM deleted_projects WHERE id=$1 RETURNING id",
+      [req.params.id]
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "not found" });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -352,10 +377,6 @@ router.post("/trash/:id/restore", auth, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// 通訳カレンダー用ソフトデリート（deleted_at）
-// ─────────────────────────────────────────────
-
 /**
  * 通訳カレンダーから案件を削除（ソフトデリート）
  */
@@ -371,9 +392,6 @@ router.delete("/projects/:id/soft", auth, async (req, res) => {
   }
 });
 
-/**
- * ソフトデリートされた案件一覧（通訳カレンダーのゴミ箱）
- */
 /**
  * ソフトデリートされた案件を復元
  */

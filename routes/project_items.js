@@ -172,7 +172,8 @@ router.get("/project-items/detail", auth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT pi.id, pi.equipment_id, pi.quantity, pi.checked,
-              e.name AS equipment_name, e.image_url
+              e.name AS equipment_name, e.image_url,
+              (pi.quantity = 0)::boolean AS is_undecided
        FROM project_items pi
        JOIN equipment e ON e.id = pi.equipment_id
        WHERE pi.project_id = $1

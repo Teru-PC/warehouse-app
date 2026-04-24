@@ -3,10 +3,14 @@ function qs(name) {
 }
 
 function getToken() {
+  // auth.jsのauthUtils.getTokenが利用可能な場合はそちらを使う（統一）
+  if (window.authUtils && typeof window.authUtils.getToken === 'function') {
+    return window.authUtils.getToken() || null;
+  }
   const keys = ["token", "jwt", "authToken", "access_token"];
   for (const k of keys) {
     const v = localStorage.getItem(k);
-    if (v) return v.replace(/^Bearer\s+/i, "");
+    if (v && String(v).trim()) return String(v).trim().replace(/^Bearer\s+/i, "");
   }
   return null;
 }

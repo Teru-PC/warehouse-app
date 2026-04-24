@@ -173,8 +173,19 @@ async function importFromGoogle() {
       expiry_date: tokens.expiry_date
     });
     oauth2Client.on("tokens", async (newTokens) => {
-      await pool.query("UPDATE google_tokens SET access_token=$1, expiry_date=$2 WHERE id=1",
-        [newTokens.access_token, newTokens.expiry_date]);
+      if (newTokens.refresh_token) {
+        await pool.query(
+          "UPDATE google_tokens SET access_token=$1, refresh_token=$2, expiry_date=$3 WHERE id=1",
+          [newTokens.access_token, newTokens.refresh_token, newTokens.expiry_date]
+        );
+        console.log("Google tokens updated (including refresh_token)");
+      } else {
+        await pool.query(
+          "UPDATE google_tokens SET access_token=$1, expiry_date=$2 WHERE id=1",
+          [newTokens.access_token, newTokens.expiry_date]
+        );
+        console.log("Google tokens updated (access_token only)");
+      }
     });
 
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
@@ -362,10 +373,33 @@ router.post("/google/import", auth, async (req, res) => {
   }
 });
 
+// 毎日午前3時にトークンを事前更新（Asia/Tokyo基準）
+cron.schedule("0 3 * * *", async () => {
+  console.log("Running scheduled token refresh...");
+  try {
+    const result = await pool.query("SELECT * FROM google_tokens WHERE id=1");
+    if (!result.rows.length) return;
+    const tokens = result.rows[0];
+    oauth2Client.setCredentials({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expiry_date: tokens.expiry_date
+    });
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    await pool.query(
+      "UPDATE google_tokens SET access_token=$1, expiry_date=$2 WHERE id=1",
+      [credentials.access_token, credentials.expiry_date]
+    );
+    console.log("Scheduled token refresh successful");
+  } catch (err) {
+    console.error("Scheduled token refresh error:", err.message);
+  }
+}, { timezone: "Asia/Tokyo" });
+
 cron.schedule("0 * * * *", async () => {
   console.log("Running scheduled Google Calendar sync...");
   try { await importFromGoogle(); }
   catch (err) { console.error("Scheduled sync error:", err); }
-});
+}, { timezone: "Asia/Tokyo" });
 
 module.exports = router;

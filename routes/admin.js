@@ -1,19 +1,12 @@
-const express = require("express");
-const router  = express.Router();
-const db      = require("../db");
-const bcrypt  = require("bcryptjs");
-const auth    = require("../middleware/auth");
-
-// adminロールチェックミドルウェア
-function requireAdmin(req, res, next) {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "管理者権限が必要です" });
-  }
-  next();
-}
+const express   = require("express");
+const router    = express.Router();
+const db        = require("../db");
+const bcrypt    = require("bcryptjs");
+const auth      = require("../middleware/auth");
+const adminAuth = require("../middleware/adminAuth");
 
 // ─── ユーザー一覧 ───────────────────────────────────────────
-router.get("/api/admin/users", auth, requireAdmin, async (req, res) => {
+router.get("/api/admin/users", auth, adminAuth, async (req, res) => {
   try {
     const result = await db.query(
       "SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC"
@@ -26,12 +19,16 @@ router.get("/api/admin/users", auth, requireAdmin, async (req, res) => {
 });
 
 // ─── ユーザー追加 ───────────────────────────────────────────
-router.post("/api/admin/users", auth, requireAdmin, async (req, res) => {
+router.post("/api/admin/users", auth, adminAuth, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: "名前・メール・パスワードは必須です" });
     }
+    // ロールのバリデーション
+    const allowedRoles = ["admin", "user"];
+    const safeRole = allowedRoles.includes(role) ? role : "user";
+
     // 重複チェック
     const exists = await db.query("SELECT id FROM users WHERE email = $1", [email]);
     if (exists.rows.length > 0) {
@@ -40,9 +37,8 @@ router.post("/api/admin/users", auth, requireAdmin, async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const result = await db.query(
       "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at",
-      [name, email, hash, role || "user"]
+      [name, email, hash, safeRole]
     );
-    // 変更履歴を記録
     await logChange(req.user.id, "user_add", `ユーザー追加: ${name} (${email})`);
     res.json(result.rows[0]);
   } catch (err) {
@@ -52,7 +48,7 @@ router.post("/api/admin/users", auth, requireAdmin, async (req, res) => {
 });
 
 // ─── ユーザー削除 ───────────────────────────────────────────
-router.delete("/api/admin/users/:id", auth, requireAdmin, async (req, res) => {
+router.delete("/api/admin/users/:id", auth, adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
     if (parseInt(id) === req.user.id) {
@@ -72,7 +68,7 @@ router.delete("/api/admin/users/:id", auth, requireAdmin, async (req, res) => {
 });
 
 // ─── ログイン履歴 ───────────────────────────────────────────
-router.get("/api/admin/login-logs", auth, requireAdmin, async (req, res) => {
+router.get("/api/admin/login-logs", auth, adminAuth, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT ll.id, ll.user_id, u.name, u.email, ll.logged_in_at, ll.success, ll.ip_address
@@ -89,7 +85,7 @@ router.get("/api/admin/login-logs", auth, requireAdmin, async (req, res) => {
 });
 
 // ─── 変更履歴 ───────────────────────────────────────────────
-router.get("/api/admin/change-logs", auth, requireAdmin, async (req, res) => {
+router.get("/api/admin/change-logs", auth, adminAuth, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT cl.id, cl.user_id, u.name, u.email, cl.action, cl.detail, cl.changed_at
@@ -117,7 +113,6 @@ async function logChange(userId, action, detail) {
   }
 }
 
-// ─── 外部からlogChangeを使えるようにエクスポート ────────────
 router.logChange = logChange;
 
 module.exports = router;

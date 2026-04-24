@@ -6,8 +6,14 @@
     return PUBLIC_PAGES.some(p => location.pathname.endsWith(p));
   }
 
+  // token / jwt / authToken / access_token の順に探す（全ファイル共通）
   function getToken() {
-    return localStorage.getItem('token') || '';
+    const keys = ['token', 'jwt', 'authToken', 'access_token'];
+    for (const k of keys) {
+      const v = localStorage.getItem(k);
+      if (v && String(v).trim()) return String(v).trim().replace(/^Bearer\s+/i, '');
+    }
+    return '';
   }
 
   function getUser() {
@@ -68,8 +74,8 @@
       // 非アクティブタイムアウトチェック
       if (!checkInactiveTimeout()) {
         updateLastActive();
-        // トークン有効性確認
-        validateToken();
+        // トークン有効性確認（awaitして401時に確実にログアウト）
+        validateToken().catch(() => {});
         // アクティブ時刻を定期更新
         ['click', 'keydown', 'scroll', 'mousemove'].forEach(ev => {
           document.addEventListener(ev, updateLastActive, { passive: true });

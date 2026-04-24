@@ -3,6 +3,10 @@ function qs(name) {
 }
 
 function getToken() {
+  // auth.jsのauthUtils.getTokenが利用可能な場合はそちらを使う（統一）
+  if (window.authUtils && typeof window.authUtils.getToken === 'function') {
+    return window.authUtils.getToken() || null;
+  }
   const keys = ["token", "jwt", "authToken", "access_token"];
   for (const k of keys) {
     const v = localStorage.getItem(k);
@@ -179,10 +183,10 @@ async function loadItems(projectId) {
       <div class="assigned-item">
         ${imgHtml}
         <div class="info">
-          <div class="name">${escapeHtml(it.equipment_name)}</div>
+          <div class="name">${escapeHtml(it.equipment_name)}${it.quantity === 0 ? ' <span style="background:#fef3c7;color:#92400e;font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid #fcd34d;font-weight:600;">数量未定</span>' : ''}</div>
           <div class="qty-row">
             <span style="color:#6b7280;font-size:13px">数量:</span>
-            <select class="qtyEdit" data-id="${it.id}" style="padding:4px 6px;font-size:14px;border:1px solid #ccc;border-radius:6px;">
+            <select class="qtyEdit" data-id="${it.id}" style="padding:4px 6px;font-size:14px;border:1px solid #ccc;border-radius:6px;${it.quantity === 0 ? 'border-color:#fcd34d;background:#fffbeb;' : ''}">
   <option value="0"${it.quantity === 0 ? ' selected' : ''}>未定</option>
   ${Array.from({length: 99}, (_, i) => i + 1).map(i => `<option value="${i}"${it.quantity === i ? ' selected' : ''}>${i}</option>`).join('')}
 </select>
