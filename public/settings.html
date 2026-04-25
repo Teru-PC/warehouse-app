@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <script src="/js/auth.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>設定</title>
+  <link rel="icon" href="data:," />
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #111; }
+
+    header {
+      position: sticky; top: 0; background: #fff;
+      border-bottom: 1px solid #e5e7eb; padding: 8px 12px;
+      z-index: 10; display: flex; align-items: center; gap: 8px;
+    }
+    header h1 { margin: 0; font-size: 16px; white-space: nowrap; flex-shrink: 0; }
+    .pill {
+      font-size: 12px; padding: 6px 10px; border-radius: 999px;
+      background: #f3f4f6; border: 1px solid #e5e7eb;
+      cursor: pointer; text-decoration: none; color: #111; white-space: nowrap;
+    }
+    .pill:hover { background: #e5e7eb; }
+
+    .layout { display: flex; max-width: 1100px; margin: 0 auto; gap: 0; }
+
+    /* サイドバー */
+    .sidebar {
+      width: 220px; flex-shrink: 0; background: #fff;
+      border-right: 1px solid #e5e7eb; min-height: calc(100vh - 49px);
+      padding: 16px 0;
+    }
+    .tree-section { margin-bottom: 4px; }
+    .tree-header {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; font-size: 13px; font-weight: 700;
+      color: #374151; cursor: pointer; user-select: none;
+    }
+    .tree-header:hover { background: #f9fafb; }
+    .tree-arrow { font-size: 10px; transition: transform 0.15s; }
+    .tree-arrow.open { transform: rotate(90deg); }
+    .tree-children { display: none; }
+    .tree-children.open { display: block; }
+    .tree-item {
+      display: block; padding: 7px 16px 7px 36px;
+      font-size: 13px; color: #4b5563; cursor: pointer;
+      text-decoration: none; border-left: 3px solid transparent;
+    }
+    .tree-item:hover { background: #f9fafb; color: #111; }
+    .tree-item.active {
+      background: #eff6ff; color: #1d4ed8;
+      border-left-color: #2563eb; font-weight: 600;
+    }
+
+    /* メインコンテンツ */
+    .content { flex: 1; padding: 24px; min-width: 0; }
+    .content-section { display: none; }
+    .content-section.active { display: block; }
+
+    .page-title { font-size: 18px; font-weight: 800; margin: 0 0 4px; }
+    .page-desc  { font-size: 13px; color: #6b7280; margin: 0 0 20px; }
+
+    .card {
+      background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    }
+    .card-title { font-size: 14px; font-weight: 700; margin: 0 0 14px; color: #374151; }
+
+    /* ツールバー */
+    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+    .tab-btn {
+      padding: 7px 14px; border-radius: 8px; border: 1px solid #e5e7eb;
+      background: #fff; font-size: 13px; cursor: pointer; font-weight: 600; color: #374151;
+    }
+    .tab-btn.active { background: #111827; color: #fff; border-color: #111827; }
+    .tab-btn:hover:not(.active) { background: #f9fafb; }
+
+    .btn {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid #e5e7eb;
+      background: #fff; font-size: 13px; cursor: pointer; font-weight: 600;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #111827; color: #fff; border-color: #111827; }
+    .btn-primary:hover:not(:disabled) { background: #1f2937; }
+    .btn-danger  { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+    .btn-danger:hover:not(:disabled)  { background: #fecaca; }
+    .btn-success { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+    .btn-success:hover:not(:disabled) { background: #a7f3d0; }
+
+    /* 品目テーブル */
+    .items-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .items-tbl th {
+      background: #f9fafb; border: 1px solid #e5e7eb;
+      padding: 8px 10px; text-align: left; font-weight: 700;
+      white-space: nowrap; color: #374151;
+    }
+    .items-tbl td { border: 1px solid #e5e7eb; padding: 5px 6px; vertical-align: middle; }
+    .items-tbl tr:hover td { background: #fafafa; }
+    .items-tbl input[type="text"], .items-tbl input[type="number"] {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 5px 8px; font-size: 13px; background: #fff;
+    }
+    .items-tbl input:focus { outline: 2px solid #2563eb; border-color: transparent; }
+    .td-del { width: 44px; text-align: center; }
+    .del-btn {
+      background: none; border: none; cursor: pointer;
+      color: #9ca3af; font-size: 18px; padding: 0 4px; line-height: 1;
+    }
+    .del-btn:hover { color: #b91c1c; }
+
+    .err { color: #b91c1c; font-size: 13px; padding: 8px 12px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 10px; }
+    .ok  { color: #065f46; font-size: 13px; padding: 8px 12px; background: #d1fae5; border-radius: 8px; border: 1px solid #6ee7b7; margin-bottom: 10px; }
+
+    .section-notice {
+      font-size: 13px; color: #6b7280; background: #f9fafb;
+      border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>⚙ 設定</h1>
+    <div style="display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap;">
+      <a class="pill" href="/calendar.html">📅 カレンダー</a>
+      <a class="pill" href="/equipment.html">🔧 機材管理</a>
+      <a class="pill" href="/quotes.html">📄 見積書</a>
+      <a class="pill" href="/staff-calendar.html" style="background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7;">👤 通訳</a>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- サイドバー -->
+    <nav class="sidebar">
+      <div class="tree-section">
+        <div class="tree-header" onclick="toggleTree(this)">
+          <span class="tree-arrow open">▶</span>
+          <span>リスト編集</span>
+        </div>
+        <div class="tree-children open">
+          <a class="tree-item active" data-section="priceMaster" onclick="showSection('priceMaster', this)">
+            価格マスタ
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- メインコンテンツ -->
+    <main class="content">
+
+      <!-- 価格マスタ編集 -->
+      <section id="section-priceMaster" class="content-section active">
+        <h2 class="page-title">価格マスタ</h2>
+        <p class="page-desc">見積書の品名・単価・単位を管理します。変更は「保存」ボタンを押すと反映されます。</p>
+
+        <div id="pmMsg"></div>
+
+        <div class="toolbar">
+          <button class="tab-btn active" id="tabInterp" onclick="switchTab('interpretation')">通訳</button>
+          <button class="tab-btn" id="tabEquip" onclick="switchTab('equipment')">機材</button>
+          <button class="btn btn-success" onclick="addRow()">＋ 行を追加</button>
+          <button class="btn btn-primary" onclick="saveMaster()" id="saveBtn">保存</button>
+        </div>
+
+        <div class="section-notice">
+          ※ 管理者権限が必要です。変更は即座にJSONファイルへ書き込まれます。
+        </div>
+
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div style="overflow-x:auto;">
+            <table class="items-tbl" id="pmTable">
+              <thead>
+                <tr>
+                  <th style="width:5%;">No.</th>
+                  <th style="width:40%;">品名</th>
+                  <th style="width:20%;">単価（円）</th>
+                  <th style="width:20%;">単位</th>
+                  <th style="width:10%;">ID</th>
+                  <th class="td-del"></th>
+                </tr>
+              </thead>
+              <tbody id="pmBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+  (function() {
+    const token = window.authUtils ? window.authUtils.getToken() : '';
+    if (!token) { location.href = '/login.html'; return; }
+
+    let master = { interpretation: [], equipment: [] };
+    let currentTab = 'interpretation';
+
+    // ── ツリー開閉 ─────────────────────────────────────────────
+    window.toggleTree = function(header) {
+      const arrow    = header.querySelector('.tree-arrow');
+      const children = header.nextElementSibling;
+      arrow.classList.toggle('open');
+      children.classList.toggle('open');
+    };
+
+    // ── セクション切替 ──────────────────────────────────────────
+    window.showSection = function(name, el) {
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tree-item').forEach(i => i.classList.remove('active'));
+      document.getElementById('section-' + name)?.classList.add('active');
+      el.classList.add('active');
+    };
+
+    // ── タブ切替 ────────────────────────────────────────────────
+    window.switchTab = function(tab) {
+      currentTab = tab;
+      document.getElementById('tabInterp').classList.toggle('active', tab === 'interpretation');
+      document.getElementById('tabEquip').classList.toggle('active',  tab === 'equipment');
+      renderTable();
+    };
+
+    // ── 価格マスタ読み込み ───────────────────────────────────────
+    fetch('/api/quotes/price-master', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(data => {
+      master = data;
+      renderTable();
+    })
+    .catch(err => {
+      showMsg('価格マスタの読み込みに失敗しました: ' + err, 'err');
+    });
+
+    // ── テーブル描画 ─────────────────────────────────────────────
+    function renderTable() {
+      const tbody = document.getElementById('pmBody');
+      tbody.innerHTML = '';
+      const items = master[currentTab] || [];
+      items.forEach((it, idx) => {
+        const tr = document.createElement('tr');
+        tr.dataset.idx = idx;
+        tr.innerHTML = `
+          <td style="text-align:center;color:#9ca3af;">${idx + 1}</td>
+          <td><input type="text"   class="f-name"  value="${esc(it.name || '')}"      placeholder="品名" /></td>
+          <td><input type="number" class="f-price" value="${Number(it.unitPrice) || 0}" min="0" step="100" /></td>
+          <td><input type="text"   class="f-unit"  value="${esc(it.unit || '')}"      placeholder="名/日" /></td>
+          <td style="font-size:11px;color:#9ca3af;">${esc(it.id || '')}</td>
+          <td class="td-del"><button class="del-btn" onclick="deleteRow(${idx})" title="削除">×</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    }
+
+    // ── 行追加 ───────────────────────────────────────────────────
+    window.addRow = function() {
+      if (!master[currentTab]) master[currentTab] = [];
+      const newId = currentTab.substring(0, 2) + '_' + Date.now();
+      master[currentTab].push({ id: newId, name: '', unitPrice: 0, unit: '' });
+      renderTable();
+      const tbody = document.getElementById('pmBody');
+      const lastRow = tbody.lastElementChild;
+      if (lastRow) lastRow.querySelector('.f-name').focus();
+    };
+
+    // ── 行削除 ───────────────────────────────────────────────────
+    window.deleteRow = function(idx) {
+      if (!confirm('この行を削除しますか？')) return;
+      master[currentTab].splice(idx, 1);
+      renderTable();
+    };
+
+    // ── テーブルからデータ収集 ────────────────────────────────────
+    function collectCurrentTab() {
+      const tbody = document.getElementById('pmBody');
+      const items = [];
+      tbody.querySelectorAll('tr').forEach(tr => {
+        const idx   = Number(tr.dataset.idx);
+        const orig  = (master[currentTab] || [])[idx] || {};
+        items.push({
+          id:        orig.id || '',
+          name:      tr.querySelector('.f-name').value.trim(),
+          unitPrice: Number(tr.querySelector('.f-price').value) || 0,
+          unit:      tr.querySelector('.f-unit').value.trim(),
+        });
+      });
+      return items;
+    }
+
+    // ── 保存 ─────────────────────────────────────────────────────
+    window.saveMaster = async function() {
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中…';
+
+      // 現在のタブのデータを反映
+      master[currentTab] = collectCurrentTab();
+
+      try {
+        const res = await fetch('/api/quotes/price-master', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(master),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMsg(data.message || '保存に失敗しました', 'err');
+        } else {
+          showMsg('保存しました', 'ok');
+          renderTable();
+        }
+      } catch (err) {
+        showMsg('通信エラー: ' + err.message, 'err');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存';
+      }
+    };
+
+    function showMsg(msg, type) {
+      const el = document.getElementById('pmMsg');
+      el.className = type === 'err' ? 'err' : 'ok';
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+  })();
+  </script>
+</body>
+</html>

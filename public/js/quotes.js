@@ -5,6 +5,26 @@
     return;
   }
 
+  // ── 価格マスタをフェッチしてオートコンプリート用datalistを作成 ──
+  fetch('/api/quotes/price-master', { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      const names = [
+        ...(data.interpretation || []).map(i => i.name),
+        ...(data.equipment || []).map(i => i.name),
+      ];
+      const dl = document.createElement('datalist');
+      dl.id = 'itemNameList';
+      names.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        dl.appendChild(opt);
+      });
+      document.body.appendChild(dl);
+    })
+    .catch(() => {});
+
   // ── DOM refs ──────────────────────────────────────────────
   const emailTextEl   = document.getElementById('emailText');
   const generateBtn   = document.getElementById('generateBtn');
@@ -71,23 +91,40 @@
   fType.addEventListener('change', updateCardVisibility);
 
   // ── 品目行を追加 ──────────────────────────────────────────
-  function addItemRow(tbody, item) {
+  function addItemRow(tbody, item, isEquip) {
     item = item || { name: '', quantity: 1, unit: '式', unitPrice: 0 };
+    const isVenue = isEquip && Boolean(item.venueEquipment);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="td-name"><input type="text"   value="${esc(item.name)}"                  placeholder="品名" /></td>
-      <td><input type="number" value="${Number(item.quantity) || 1}" min="0" style="width:70px;" /></td>
-      <td><input type="text"   value="${esc(item.unit || '式')}"        style="width:50px;" /></td>
-      <td><input type="number" value="${Number(item.unitPrice) || 0}"  min="0" step="100" /></td>
-      <td class="td-sub">${fmt(calcSubtotal(item.quantity, item.unitPrice))}</td>
+      <td class="td-name"><input type="text" class="name-input" value="${esc(item.name)}" placeholder="品名" list="itemNameList" /></td>
+      <td>
+        ${isEquip ? `<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+          <input type="checkbox" class="venue-check" ${isVenue ? 'checked' : ''}>常設
+        </label>` : ''}
+        <input type="number" class="qty-input" value="${Number(item.quantity) || 1}" min="0" style="width:60px;${isVenue ? 'display:none;' : ''}" />
+      </td>
+      <td><input type="text" class="unit-input" value="${esc(item.unit || '式')}" style="width:50px;" /></td>
+      <td><input type="number" class="price-input" value="${Number(item.unitPrice) || 0}" min="0" step="100" /></td>
+      <td class="td-sub">${isVenue ? fmt(0) : fmt(calcSubtotal(item.quantity, item.unitPrice))}</td>
       <td class="td-del"><button class="del-btn" type="button" title="削除">×</button></td>
     `;
-    const inputs = tr.querySelectorAll('input');
-    const qtyIn   = inputs[1];
-    const priceIn = inputs[3];
+    const qtyIn   = tr.querySelector('.qty-input');
+    const priceIn = tr.querySelector('.price-input');
     function updateSub() {
-      tr.querySelector('.td-sub').textContent = fmt(calcSubtotal(qtyIn.value, priceIn.value));
+      const venueChk = tr.querySelector('.venue-check');
+      if (venueChk && venueChk.checked) {
+        tr.querySelector('.td-sub').textContent = fmt(0);
+      } else {
+        tr.querySelector('.td-sub').textContent = fmt(calcSubtotal(qtyIn.value, priceIn.value));
+      }
       recalcTotal();
+    }
+    if (isEquip) {
+      const venueChk = tr.querySelector('.venue-check');
+      venueChk.addEventListener('change', () => {
+        qtyIn.style.display = venueChk.checked ? 'none' : '';
+        updateSub();
+      });
     }
     qtyIn.addEventListener('input', updateSub);
     priceIn.addEventListener('input', updateSub);
@@ -95,9 +132,9 @@
     tbody.appendChild(tr);
   }
 
-  function renderTable(tbody, items) {
+  function renderTable(tbody, items, isEquip) {
     tbody.innerHTML = '';
-    (items || []).forEach(item => addItemRow(tbody, item));
+    (items || []).forEach(item => addItemRow(tbody, item, isEquip));
   }
 
   // ── 合計を再計算 ──────────────────────────────────────────
@@ -105,9 +142,15 @@
     let total = 0;
     function sumTable(tbody) {
       tbody.querySelectorAll('tr').forEach(tr => {
-        const inputs = tr.querySelectorAll('input');
-        if (inputs.length < 4) return;
-        const sub = calcSubtotal(inputs[1].value, inputs[3].value);
+        const venueChk = tr.querySelector('.venue-check');
+        if (venueChk && venueChk.checked) {
+          tr.querySelector('.td-sub').textContent = fmt(0);
+          return;
+        }
+        const qtyIn   = tr.querySelector('.qty-input');
+        const priceIn = tr.querySelector('.price-input');
+        if (!qtyIn || !priceIn) return;
+        const sub = calcSubtotal(qtyIn.value, priceIn.value);
         tr.querySelector('.td-sub').textContent = fmt(sub);
         total += sub;
       });
@@ -121,14 +164,20 @@
   function collectTableItems(tbody) {
     const items = [];
     tbody.querySelectorAll('tr').forEach(tr => {
-      const inputs = tr.querySelectorAll('input');
-      if (inputs.length < 4) return;
+      const nameIn  = tr.querySelector('.name-input');
+      const qtyIn   = tr.querySelector('.qty-input');
+      const unitIn  = tr.querySelector('.unit-input');
+      const priceIn = tr.querySelector('.price-input');
+      if (!nameIn || !priceIn) return;
+      const venueChk = tr.querySelector('.venue-check');
+      const isVenue  = venueChk ? venueChk.checked : false;
       items.push({
-        name:      inputs[0].value,
-        quantity:  Number(inputs[1].value) || 0,
-        unit:      inputs[2].value,
-        unitPrice: Number(inputs[3].value) || 0,
-        subtotal:  calcSubtotal(inputs[1].value, inputs[3].value),
+        name:           nameIn.value,
+        quantity:       isVenue ? 0 : (Number(qtyIn ? qtyIn.value : 1) || 0),
+        unit:           unitIn ? unitIn.value : '式',
+        unitPrice:      isVenue ? 0 : (Number(priceIn.value) || 0),
+        subtotal:       isVenue ? 0 : calcSubtotal(qtyIn ? qtyIn.value : 1, priceIn.value),
+        venueEquipment: isVenue,
       });
     });
     return items;
@@ -155,6 +204,11 @@
       outsideTokyo:       Boolean(quoteData && quoteData.outsideTokyo),
       isTaxExempt:        Boolean(quoteData && quoteData.isTaxExempt),
       languages:          (quoteData && quoteData.languages) || [],
+      requiresStay:       Boolean(quoteData && quoteData.requiresStay),
+      preDayEntry:        Boolean(quoteData && quoteData.preDayEntry),
+      workingHours:       Number((quoteData && quoteData.workingHours) || 0),
+      travelPattern:      (quoteData && quoteData.travelPattern) || 'none',
+      transportRoute:     (quoteData && quoteData.transportRoute) || '',
     };
   }
 
@@ -185,8 +239,8 @@
       fDate.value     = data.eventDate    || '';
       if (fLocation) fLocation.value = data.location || '';
 
-      renderTable(interpBody, data.interpretationItems || []);
-      renderTable(equipBody,  data.equipmentItems      || []);
+      renderTable(interpBody, data.interpretationItems || [], false);
+      renderTable(equipBody,  data.equipmentItems      || [], true);
       updateCardVisibility();
 
       previewArea.style.display = 'block';
@@ -200,8 +254,8 @@
   });
 
   // ── 行追加ボタン ──────────────────────────────────────────
-  addInterpBtn.addEventListener('click', () => addItemRow(interpBody, null));
-  addEquipBtn.addEventListener('click',  () => addItemRow(equipBody,  null));
+  addInterpBtn.addEventListener('click', () => addItemRow(interpBody, null, false));
+  addEquipBtn.addEventListener('click',  () => addItemRow(equipBody,  null, true));
 
   // ── Excel ダウンロード（サーバーサイド xlsx）─────────────
   excelBtn.addEventListener('click', async () => {
@@ -234,15 +288,17 @@
 
   // ── PDF ダウンロード ──────────────────────────────────────
   pdfBtn.addEventListener('click', () => {
-    const d            = collectData();
-    const locStr       = d.location;
-    const interpreters = d.interpreters;
-    const discount     = d.discount;
+    const d              = collectData();
+    const locStr         = d.location;
+    const interpreters   = d.interpreters;
+    const discount       = d.discount;
     const isOutsideTokyo = d.outsideTokyo;
-    const interpItems  = d.interpretationItems;
-    const equipItems   = d.equipmentItems;
-    const numDays      = d.numDays;
-    const isTaxExempt  = d.isTaxExempt ||
+    const interpItems    = d.interpretationItems;
+    const equipItems     = d.equipmentItems;
+    const numDays        = d.numDays;
+    const workingHours   = d.workingHours || 0;
+    const travelPattern  = d.travelPattern || 'none';
+    const isTaxExempt    = d.isTaxExempt ||
       /国連|UN\b|UNESCO|WHO|UNDP|UNICEF|WFP|ILO|IMF|OECD|世界銀行/i.test(d.customerName || '');
 
     const now = new Date();
@@ -315,34 +371,102 @@
       }).join('');
 
       const interpFeeTotal = interpItems.reduce((s, it) => s + it.subtotal, 0);
-      const mgmtFee        = Math.round(interpFeeTotal * 0.1);
-      const travelUnit     = 28000;
-      const dailyUnit      = 8000;
-      const travelTotal    = travelUnit * interpreters * numDays;
-      const dailyTotal     = dailyUnit  * interpreters * numDays;
-      const qtyStr         = `${interpreters}名×${numDays}日`;
-      const mgmtNum        = rowNum++;
 
-      let travelRows = '';
-      if (isOutsideTokyo) {
-        const tN = rowNum++, dN = rowNum++;
-        travelRows = `
+      // 延長料（workingHours > 8 の場合のみ追加）
+      const overtimeUnit = 7000;
+      let overtimeFee = 0;
+      let overtimeRow = '';
+      if (workingHours > 8) {
+        const extraHours   = workingHours - 8;
+        const extra05Units = Math.ceil(extraHours / 0.5);
+        const extraHrsVal  = extra05Units * 0.5;
+        const extraHrsStr  = extraHrsVal % 1 === 0
+          ? `${extraHrsVal}時間` : `${extraHrsVal}時間`;
+        overtimeFee = overtimeUnit * interpreters * extra05Units;
+        const overN = rowNum++;
+        overtimeRow = `
           <tr>
-            <td class="td-name">${tN})&ensp;移動拘束費</td>
-            <td class="td-price">${fmt(travelUnit)}</td>
-            <td class="td-qty">${qtyStr}</td>
-            <td class="td-sub">${fmt(travelTotal)}</td>
-          </tr>
-          <tr>
-            <td class="td-name">${dN})&ensp;日当</td>
-            <td class="td-price">${fmt(dailyUnit)}</td>
-            <td class="td-qty">${qtyStr}</td>
-            <td class="td-sub">${fmt(dailyTotal)}</td>
+            <td class="td-name">${overN})&ensp;延長料</td>
+            <td class="td-price">${fmt(overtimeUnit)}</td>
+            <td class="td-qty">${interpreters}名×${extraHrsStr}</td>
+            <td class="td-sub">${fmt(overtimeFee)}</td>
           </tr>`;
       }
 
-      const totalBeforeTax = interpFeeTotal + mgmtFee
-        + (isOutsideTokyo ? travelTotal + dailyTotal : 0);
+      // 管理費（通訳料 + 延長料 に対して10%）
+      const mgmtBase = interpFeeTotal + overtimeFee;
+      const mgmtFee  = Math.round(mgmtBase * 0.1);
+      const mgmtNum  = rowNum++;
+
+      // 移動拘束費・日当（travelPatternベース）
+      const travelUnit = 28000, dailyUnit = 8000;
+      let travelFee = 0, dailyFee = 0;
+      let travelRows = '';
+
+      if (isOutsideTokyo && travelPattern !== 'none') {
+        let travelCount = 0, dailyCount = 0;
+        let travelQtyStr = '', dailyQtyStr = '';
+
+        if (travelPattern === 'sameDay') {
+          travelCount = 2; dailyCount = 1;
+          travelQtyStr = `${interpreters}名×2回`;
+          dailyQtyStr  = `${interpreters}名×1泊`;
+        } else if (travelPattern === 'preDay') {
+          travelCount = 2; dailyCount = 2;
+          travelQtyStr = `${interpreters}名×2回`;
+          dailyQtyStr  = `${interpreters}名×2泊`;
+        } else if (travelPattern === 'dayTrip') {
+          travelCount = 1; dailyCount = 0;
+          travelQtyStr = `${interpreters}名×1回`;
+        }
+
+        travelFee = travelUnit * interpreters * travelCount;
+        dailyFee  = dailyUnit  * interpreters * dailyCount;
+
+        if (travelFee > 0) {
+          const tN = rowNum++;
+          travelRows += `
+          <tr>
+            <td class="td-name">${tN})&ensp;移動拘束費</td>
+            <td class="td-price">${fmt(travelUnit)}</td>
+            <td class="td-qty">${travelQtyStr}</td>
+            <td class="td-sub">${fmt(travelFee)}</td>
+          </tr>`;
+        }
+        if (dailyFee > 0) {
+          const dN = rowNum++;
+          travelRows += `
+          <tr>
+            <td class="td-name">${dN})&ensp;日当</td>
+            <td class="td-price">${fmt(dailyUnit)}</td>
+            <td class="td-qty">${dailyQtyStr}</td>
+            <td class="td-sub">${fmt(dailyFee)}</td>
+          </tr>`;
+        }
+
+        // 交通費・宿泊費（実費）
+        const transportLabel = d.transportRoute
+          ? `交通費（${esc(d.transportRoute)}）` : '交通費';
+        const transN = rowNum++;
+        travelRows += `
+          <tr>
+            <td class="td-name">${transN})&ensp;${transportLabel}</td>
+            <td class="td-jitsubi" colspan="2">実費で請求させていただきます</td>
+            <td class="td-sub" style="text-align:center; color:#6b7280; font-style:italic;">実費</td>
+          </tr>`;
+
+        if (d.requiresStay) {
+          const stayN = rowNum++;
+          travelRows += `
+            <tr>
+              <td class="td-name">${stayN})&ensp;宿泊費</td>
+              <td class="td-jitsubi" colspan="2">実費で請求させていただきます</td>
+              <td class="td-sub" style="text-align:center; color:#6b7280; font-style:italic;">実費</td>
+            </tr>`;
+        }
+      }
+
+      const totalBeforeTax = mgmtBase + mgmtFee + travelFee + dailyFee;
       const tax   = isTaxExempt ? 0 : Math.round(totalBeforeTax * 0.1);
       const grand = totalBeforeTax + tax;
 
@@ -362,10 +486,11 @@
           </thead>
           <tbody>
             ${itemRows}
+            ${overtimeRow}
             <tr>
               <td class="td-name">${mgmtNum})&ensp;上記通訳料の10%（管理費）</td>
               <td class="td-price"></td>
-              <td class="td-qty">一式</td>
+              <td class="td-qty"></td>
               <td class="td-sub">${fmt(mgmtFee)}</td>
             </tr>
             ${travelRows}
@@ -383,8 +508,8 @@
         <div class="notes-block">
           ${!isTaxExempt ? '<p class="star-note">＊は消費税額を含む金額であることを示します</p>' : ''}
           <table class="notes-tbl">
-            <tr><td>納入日</td><td>：</td><td>「項目」欄を参照</td></tr>
-            <tr><td>納入場所</td><td>：</td><td>☆☆☆☆☆本社</td></tr>
+            <tr><td>納入日</td><td>：</td><td>${d.eventDate ? esc(d.eventDate) : '「項目」欄を参照'}</td></tr>
+            <tr><td>納入場所</td><td>：</td><td>${d.location ? esc(d.location) : '「項目」欄を参照'}</td></tr>
             <tr><td>お支払</td><td>：</td><td>請求日より30日以内銀行振込</td></tr>
           </table>
           <ul class="notes-list">
@@ -429,12 +554,12 @@
             <tr><td class="td-name">2)</td><td></td><td></td><td></td></tr>
             <tr><td class="td-name">3)</td><td></td><td></td><td></td></tr>
             <tr><td class="td-name">4)</td><td></td><td></td><td></td></tr>
-            <tr>
+            ${discount > 0 ? `<tr>
               <td class="td-name">お値引き</td>
               <td class="td-price"></td>
               <td class="td-qty"></td>
-              <td class="td-sub">${discount > 0 ? '▲' + fmt(discount) : '¥0'}</td>
-            </tr>
+              <td class="td-sub">▲${fmt(discount)}</td>
+            </tr>` : ''}
             <tr class="empty-row"><td class="td-name">&nbsp;</td><td></td><td></td><td></td></tr>
             <tr class="empty-row"><td class="td-name">&nbsp;</td><td></td><td></td><td></td></tr>
           </tbody>
@@ -458,9 +583,19 @@
     }
 
     function buildEquipDetailPage() {
+      let detailTotal = 0;
       const detailRows = equipItems.map(it => {
+        if (it.venueEquipment) {
+          return `
+          <tr>
+            <td class="td-name">${esc(it.name)}</td>
+            <td class="td-center venue-equip" colspan="3">会場常設を使用</td>
+            <td class="td-right">¥0</td>
+          </tr>`;
+        }
         const qty    = Math.max(1, Number(it.quantity) || 1);
         const amount = qty * numDays * (Number(it.unitPrice) || 0);
+        detailTotal += amount;
         return `
         <tr>
           <td class="td-name">${esc(it.name)}</td>
@@ -468,13 +603,8 @@
           <td class="td-center">${numDays}</td>
           <td class="td-right">${fmt(it.unitPrice)}</td>
           <td class="td-right">${fmt(amount)}</td>
-          <td class="td-center"></td>
         </tr>`;
       }).join('');
-
-      const equipTotal = equipItems.reduce((s, it) => {
-        return s + Math.max(1, Number(it.quantity) || 1) * numDays * (Number(it.unitPrice) || 0);
-      }, 0);
 
       return `
       <div class="page">
@@ -496,15 +626,14 @@
               <th class="th-center">日数</th>
               <th class="th-right">単　価</th>
               <th class="th-right">金　額</th>
-              <th class="th-center">備　考</th>
             </tr>
           </thead>
           <tbody>
             ${detailRows}
             <tr class="detail-total-row">
-              <td colspan="3" class="td-name">合　計　金　額</td>
-              <td colspan="2" class="td-right">${fmt(equipTotal)}</td>
-              <td></td>
+              <td colspan="2" style="border:1px solid #000;"></td>
+              <td class="td-right" style="border:1px solid #000; font-weight:bold; white-space:nowrap;">合　計　金　額</td>
+              <td colspan="2" class="td-right" style="border:1px solid #000; font-weight:bold;">${fmt(detailTotal)}</td>
             </tr>
           </tbody>
         </table>
@@ -554,14 +683,15 @@
       .th-sub   { width: 20%; }
       .th-center { text-align: center; }
       .th-right  { text-align: right; }
-      .detail-tbl th:nth-child(1) { width: 30%; }
+      .detail-tbl th:nth-child(1) { width: 35%; }
       .detail-tbl th:nth-child(2) { width: 10%; }
       .detail-tbl th:nth-child(3) { width: 10%; }
-      .detail-tbl th:nth-child(4) { width: 17%; }
-      .detail-tbl th:nth-child(5) { width: 23%; }
-      .detail-tbl th:nth-child(6) { width: 10%; }
+      .detail-tbl th:nth-child(4) { width: 20%; }
+      .detail-tbl th:nth-child(5) { width: 25%; }
       .detail-tbl th, .detail-tbl td { padding: 4px 6px; white-space: nowrap; }
       .detail-tbl .td-name { white-space: normal; }
+      .td-jitsubi { text-align:center; background:#f3f4f6; font-size:0.9em; padding:4px 8px; color:#374151; }
+      .venue-equip { text-align:center; background:#f3f4f6; font-style:italic; }
       .empty-row td { height: 24px; }
       .detail-total-row td { border-top: 2px solid #000; font-weight: bold; font-size: 11pt; }
       .td-name   { text-align: left; }

@@ -47,14 +47,9 @@ ${emailText}
 
 【項目分類ルール（重要）】
 ■ interpretationItems（通訳見積書）に含める項目：
-- 同時通訳料（英語・中国語・フランス語など言語別）
-- 延長料・超過料金（通訳）
-- 移動拘束費（東京以外の出張時のみ）
-- 日当（東京以外の出張時のみ）
-- 交通費（東京以外の出張時のみ）
-- 宿泊費（東京以外の出張時のみ）
+- 同時通訳料（英語・中国語・フランス語など言語別。拘束時間が4時間以内なら「半日」、4〜8時間なら「1日」を選択）
 - 通訳音声二次使用料（依頼がある場合のみ）
-※管理費（通訳料の10%）は自動計算するため含めない
+※延長料・移動拘束費・日当・管理費はシステムが自動計算するため含めない
 
 ■ equipmentItems（機材見積書）に含める項目：
 - 同時通訳機器類（通訳ユニット・ブース・受信機・送信機など）
@@ -69,14 +64,34 @@ ${emailText}
   通訳ブース・受信機などは必ずequipmentItemsのみ。
   通訳料は必ずinterpretationItemsのみ。
 
+【出張判定ルール】
+- 渋谷から100km以上 OR 新幹線・飛行機が必要な場合 → outsideTokyo: true
+- 東京都内・神奈川・埼玉・千葉などの近郊 → outsideTokyo: false
+- 大阪・名古屋・福岡・沖縄・札幌・広島・仙台などの遠方 → outsideTokyo: true
+
+【travelPattern の判定】
+- "none"     : 出張なし（outsideTokyo: false）または移動情報が不明
+- "dayTrip"  : 当日移動・当日帰宅の日帰り出張
+- "sameDay"  : 当日移動・宿泊あり・翌日帰京
+- "preDay"   : 前日入り・宿泊あり（前日入り明記、または大阪・福岡・札幌・沖縄など遠方で前日入りが一般的な場合）
+
+【拘束時間の算出】
+- 開始時刻〜終了時刻が記載されていれば workingHours を算出（小数可、例: 9.5）
+- 不明な場合は 0
+
 【出力フォーマット（JSONのみ返すこと）】
 {
   "type": "interpretation" | "equipment" | "both" | "english",
   "customerName": "顧客名（不明な場合は null）",
   "projectName": "案件名・イベント名（不明な場合は null）",
   "eventDate": "日程（例: 2025年3月15日、不明な場合は null）",
-  "location": "開催場所（不明な場合は null）",
-  "outsideTokyo": 東京以外の場合は true、東京または不明の場合は false,
+  "location": "開催都市名（例: 大阪、福岡、不明な場合は null）",
+  "outsideTokyo": 出張判定ルールに基づき true / false,
+  "requiresStay": 宿泊が必要な場合は true、日帰りまたは不明は false,
+  "preDayEntry": 前日入りが必要または明記されている場合は true、それ以外は false,
+  "workingHours": 拘束時間（数値、不明な場合は 0）,
+  "travelPattern": "none" | "dayTrip" | "sameDay" | "preDay",
+  "transportRoute": "交通手段の経路（例: 羽田空港－那覇空港、東京駅－新大阪駅（新幹線））、不明な場合は null",
   "interpreters": 通訳者数（数値、不明な場合は 1）,
   "languages": ["言語ペア（例: 日本語-英語, 日本語-中国語, 日本語-フランス語）（不明な場合は []）"],
   "numDays": イベント日数（数値、不明な場合は 1）,
@@ -186,9 +201,13 @@ router.post("/export/excel", auth, async (req, res) => {
       discount     = 0,
       numDays      = 1,
       interpreters = 1,
-      outsideTokyo = false,
-      isTaxExempt  = false,
-      languages    = [],
+      outsideTokyo  = false,
+      isTaxExempt   = false,
+      languages     = [],
+      travelPattern  = "none",
+      workingHours   = 0,
+      requiresStay   = false,
+      transportRoute = "",
     } = req.body;
 
     const workbook = new ExcelJS.Workbook();
@@ -292,43 +311,115 @@ router.post("/export/excel", auth, async (req, res) => {
         setRight(row.getCell(4)); setMoney(row.getCell(4));
       });
 
-      // 管理費
+      // 延長料 (workingHoursベース)
       const interpFeeTotal = items.reduce((s, it) => s + numVal(it.subtotal), 0);
-      const mgmtFee = Math.round(interpFeeTotal * 0.1);
-      const mgmtRow = ws.getRow(r++);
-      mgmtRow.getCell(1).value = `${items.length + 1})　上記通訳料の10%（管理費）`;
-      mgmtRow.getCell(3).value = "一式";
+      const overtimeUnit = 7000;
+      let overtimeFee = 0;
+      let extraIdx = items.length + 1;
+
+      if (numVal(workingHours) > 8) {
+        const extraHours   = numVal(workingHours) - 8;
+        const extra05Units = Math.ceil(extraHours / 0.5);
+        const extraHrsStr  = (extra05Units * 0.5) % 1 === 0
+          ? `${extra05Units * 0.5}時間` : `${extra05Units * 0.5}時間`;
+        overtimeFee = overtimeUnit * numVal(interpreters) * extra05Units;
+        const overRow = ws.getRow(r++);
+        overRow.getCell(1).value = `${extraIdx})　延長料`;
+        overRow.getCell(2).value = overtimeUnit;
+        overRow.getCell(3).value = `${interpreters}名×${extraHrsStr}`;
+        overRow.getCell(4).value = overtimeFee;
+        [1,2,3,4].forEach(c => { setFont(overRow.getCell(c), 10); setBorder(overRow.getCell(c)); });
+        setRight(overRow.getCell(2)); setMoney(overRow.getCell(2));
+        setRight(overRow.getCell(4)); setMoney(overRow.getCell(4));
+        extraIdx++;
+      }
+
+      // 管理費（通訳料 + 延長料 に対して10%）
+      const mgmtBase = interpFeeTotal + overtimeFee;
+      const mgmtFee  = Math.round(mgmtBase * 0.1);
+      const mgmtRow  = ws.getRow(r++);
+      mgmtRow.getCell(1).value = `${extraIdx})　上記通訳料の10%（管理費）`;
       mgmtRow.getCell(4).value = mgmtFee;
       [1,2,3,4].forEach(c => { setFont(mgmtRow.getCell(c), 10); setBorder(mgmtRow.getCell(c)); });
       setRight(mgmtRow.getCell(4)); setMoney(mgmtRow.getCell(4));
+      extraIdx++;
 
-      // 東京以外
-      let travelTotal = 0, dailyTotal = 0;
-      if (outsideTokyo) {
-        const travelUnit = 28000, dailyUnit = 8000;
-        travelTotal = travelUnit * numVal(interpreters) * numVal(numDays);
-        dailyTotal  = dailyUnit  * numVal(interpreters) * numVal(numDays);
-        const qtyStr = `${interpreters}名×${numDays}日`;
+      // 移動拘束費・日当（travelPatternベース）
+      const travelUnit = 28000, dailyUnit = 8000;
+      let travelFee = 0, dailyFee = 0;
 
-        const tRow = ws.getRow(r++);
-        tRow.getCell(1).value = `${items.length + 2})　移動拘束費`;
-        tRow.getCell(2).value = travelUnit; tRow.getCell(3).value = qtyStr;
-        tRow.getCell(4).value = travelTotal;
-        [1,2,3,4].forEach(c => { setFont(tRow.getCell(c), 10); setBorder(tRow.getCell(c)); });
-        setRight(tRow.getCell(2)); setMoney(tRow.getCell(2));
-        setRight(tRow.getCell(4)); setMoney(tRow.getCell(4));
+      if (outsideTokyo && travelPattern !== "none") {
+        let travelCount = 0, dailyCount = 0;
+        let travelQtyStr = "", dailyQtyStr = "";
 
-        const dRow = ws.getRow(r++);
-        dRow.getCell(1).value = `${items.length + 3})　日当`;
-        dRow.getCell(2).value = dailyUnit; dRow.getCell(3).value = qtyStr;
-        dRow.getCell(4).value = dailyTotal;
-        [1,2,3,4].forEach(c => { setFont(dRow.getCell(c), 10); setBorder(dRow.getCell(c)); });
-        setRight(dRow.getCell(2)); setMoney(dRow.getCell(2));
-        setRight(dRow.getCell(4)); setMoney(dRow.getCell(4));
+        if (travelPattern === "sameDay") {
+          travelCount = 2; dailyCount = 1;
+          travelQtyStr = `${interpreters}名×2回`;
+          dailyQtyStr  = `${interpreters}名×1泊`;
+        } else if (travelPattern === "preDay") {
+          travelCount = 2; dailyCount = 2;
+          travelQtyStr = `${interpreters}名×2回`;
+          dailyQtyStr  = `${interpreters}名×2泊`;
+        } else if (travelPattern === "dayTrip") {
+          travelCount = 1; dailyCount = 0;
+          travelQtyStr = `${interpreters}名×1回`;
+        }
+
+        travelFee = travelUnit * numVal(interpreters) * travelCount;
+        dailyFee  = dailyUnit  * numVal(interpreters) * dailyCount;
+
+        if (travelFee > 0) {
+          const tRow = ws.getRow(r++);
+          tRow.getCell(1).value = `${extraIdx})　移動拘束費`;
+          tRow.getCell(2).value = travelUnit;
+          tRow.getCell(3).value = travelQtyStr;
+          tRow.getCell(4).value = travelFee;
+          [1,2,3,4].forEach(c => { setFont(tRow.getCell(c), 10); setBorder(tRow.getCell(c)); });
+          setRight(tRow.getCell(2)); setMoney(tRow.getCell(2));
+          setRight(tRow.getCell(4)); setMoney(tRow.getCell(4));
+          extraIdx++;
+        }
+
+        if (dailyFee > 0) {
+          const dRow = ws.getRow(r++);
+          dRow.getCell(1).value = `${extraIdx})　日当`;
+          dRow.getCell(2).value = dailyUnit;
+          dRow.getCell(3).value = dailyQtyStr;
+          dRow.getCell(4).value = dailyFee;
+          [1,2,3,4].forEach(c => { setFont(dRow.getCell(c), 10); setBorder(dRow.getCell(c)); });
+          setRight(dRow.getCell(2)); setMoney(dRow.getCell(2));
+          setRight(dRow.getCell(4)); setMoney(dRow.getCell(4));
+          extraIdx++;
+        }
+
+        // 交通費（実費）
+        const transportLabel = transportRoute
+          ? `交通費（${transportRoute}）` : "交通費";
+        const transRow = ws.getRow(r++);
+        transRow.getCell(1).value = `${extraIdx})　${transportLabel}`;
+        ws.mergeCells(`B${transRow.number}:C${transRow.number}`);
+        transRow.getCell(2).value = "実費で請求させていただきます";
+        setCenter(transRow.getCell(2));
+        transRow.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+        transRow.getCell(4).value = "";
+        [1,2,4].forEach(c => { setFont(transRow.getCell(c), 10); setBorder(transRow.getCell(c)); });
+        extraIdx++;
+
+        // 宿泊費（実費、宿泊ありの場合のみ）
+        if (requiresStay) {
+          const stayRow = ws.getRow(r++);
+          stayRow.getCell(1).value = `${extraIdx})　宿泊費`;
+          ws.mergeCells(`B${stayRow.number}:C${stayRow.number}`);
+          stayRow.getCell(2).value = "実費で請求させていただきます";
+          setCenter(stayRow.getCell(2));
+          stayRow.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+          stayRow.getCell(4).value = "";
+          [1,2,4].forEach(c => { setFont(stayRow.getCell(c), 10); setBorder(stayRow.getCell(c)); });
+        }
       }
 
       r += 2; // 空行
-      const beforeTax = interpFeeTotal + mgmtFee + (outsideTokyo ? travelTotal + dailyTotal : 0);
+      const beforeTax = mgmtBase + mgmtFee + travelFee + dailyFee;
       const tax   = isTaxExempt ? 0 : Math.round(beforeTax * 0.1);
       const grand = beforeTax + tax;
       r = addTotals(ws, r, beforeTax,
@@ -339,7 +430,8 @@ router.post("/export/excel", auth, async (req, res) => {
 
       r++;
       const notes = [
-        "納入日　　：「項目」欄を参照",
+        `納入日　　：${eventDate || "「項目」欄を参照"}`,
+        `納入場所　：${location  || "「項目」欄を参照"}`,
         "お支払　　：請求日より30日以内銀行振込",
         "・通訳料半日とは、午前または午後4時間以内の拘束（実働3時間以内）を意味します",
         "・通訳料1日とは、4時間以上8時間以内の拘束（休憩含む）を意味します",
@@ -390,13 +482,15 @@ router.post("/export/excel", auth, async (req, res) => {
         [1,2,3,4].forEach(c => { setFont(row.getCell(c), 10); setBorder(row.getCell(c)); });
       }
 
-      // 値引き行
+      // 値引き行（0より大きい場合のみ表示）
       const discountVal = Math.max(0, numVal(discount));
-      const discRow = ws.getRow(r++);
-      discRow.getCell(1).value = "お値引き";
-      discRow.getCell(4).value = discountVal > 0 ? -discountVal : 0;
-      setRight(discRow.getCell(4)); setMoney(discRow.getCell(4));
-      [1,2,3,4].forEach(c => { setFont(discRow.getCell(c), 10); setBorder(discRow.getCell(c)); });
+      if (discountVal > 0) {
+        const discRow = ws.getRow(r++);
+        discRow.getCell(1).value = "お値引き";
+        discRow.getCell(4).value = -discountVal;
+        setRight(discRow.getCell(4)); setMoney(discRow.getCell(4));
+        [1,2,3,4].forEach(c => { setFont(discRow.getCell(c), 10); setBorder(discRow.getCell(c)); });
+      }
 
       r += 2;
       const discountedTotal = Math.max(0, equipTotal - discountVal);
@@ -426,11 +520,11 @@ router.post("/export/excel", auth, async (req, res) => {
     if (type === "equipment" || type === "both") {
       const ws = workbook.addWorksheet("機器明細");
       ws.columns = [
-        { width: 32 }, { width: 8 }, { width: 8 }, { width: 15 }, { width: 16 }, { width: 14 },
+        { width: 32 }, { width: 8 }, { width: 8 }, { width: 15 }, { width: 18 },
       ];
 
       // タイトル
-      ws.mergeCells("A1:F1");
+      ws.mergeCells("A1:E1");
       ws.getCell("A1").value = "同時通訳装置レンタル費用明細";
       setFont(ws.getCell("A1"), 14, true);
       ws.getCell("A1").alignment = { horizontal: "center" };
@@ -450,7 +544,7 @@ router.post("/export/excel", auth, async (req, res) => {
         const row = ws.getRow(r);
         row.getCell(1).value = label;
         row.getCell(2).value = "：";
-        ws.mergeCells(`C${r}:F${r}`);
+        ws.mergeCells(`C${r}:E${r}`);
         row.getCell(3).value = val;
         row.getCell(1).font = { name: FONT_NAME, size: 10, bold: true };
         [1,2,3].forEach(c => { setBorder(row.getCell(c)); });
@@ -460,48 +554,56 @@ router.post("/export/excel", auth, async (req, res) => {
 
       r++; // 空行
 
-      // 明細ヘッダー
+      // 明細ヘッダー（5列、備考なし）
       const hRow = ws.getRow(r++);
-      ["項　目", "台数", "日数", "単　価", "金　額", "備　考"].forEach((h, i) => {
+      ["項　目", "台数", "日数", "単　価", "金　額"].forEach((h, i) => {
         const cell = hRow.getCell(i + 1);
         cell.value = h; setCenter(cell);
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F2F2" } };
         setFont(cell, 10, true); setBorder(cell);
       });
 
-      // 明細行
+      // 明細行（会場常設対応）
       const items = Array.isArray(equipmentItems) ? equipmentItems : [];
       const nDays = Math.max(1, numVal(numDays));
       let equipTotal = 0;
       items.forEach(it => {
-        const qty    = Math.max(1, numVal(it.quantity));
-        const amount = qty * nDays * numVal(it.unitPrice);
-        equipTotal  += amount;
         const row = ws.getRow(r++);
         row.getCell(1).value = it.name || "";
-        row.getCell(2).value = qty;   setCenter(row.getCell(2));
-        row.getCell(3).value = nDays; setCenter(row.getCell(3));
-        row.getCell(4).value = numVal(it.unitPrice); setRight(row.getCell(4)); setMoney(row.getCell(4));
-        row.getCell(5).value = amount;               setRight(row.getCell(5)); setMoney(row.getCell(5));
-        row.getCell(6).value = "";
-        [1,2,3,4,5,6].forEach(c => { setFont(row.getCell(c), 10); setBorder(row.getCell(c)); });
+        if (it.venueEquipment) {
+          ws.mergeCells(`B${row.number}:D${row.number}`);
+          row.getCell(2).value = "会場常設を使用";
+          setCenter(row.getCell(2));
+          row.getCell(5).value = 0;
+          setRight(row.getCell(5)); setMoney(row.getCell(5));
+        } else {
+          const qty    = Math.max(1, numVal(it.quantity));
+          const amount = qty * nDays * numVal(it.unitPrice);
+          equipTotal  += amount;
+          row.getCell(2).value = qty;   setCenter(row.getCell(2));
+          row.getCell(3).value = nDays; setCenter(row.getCell(3));
+          row.getCell(4).value = numVal(it.unitPrice); setRight(row.getCell(4)); setMoney(row.getCell(4));
+          row.getCell(5).value = amount;               setRight(row.getCell(5)); setMoney(row.getCell(5));
+        }
+        [1,2,3,4,5].forEach(c => { setFont(row.getCell(c), 10); setBorder(row.getCell(c)); });
       });
 
-      // 合計行
+      // 合計行（小計エリアと同位置に合わせる）
       const totRow = ws.getRow(r++);
-      ws.mergeCells(`A${totRow.number}:C${totRow.number}`);
-      totRow.getCell(1).value = "合　計　金　額";
-      totRow.getCell(1).alignment = { horizontal: "center" };
-      ws.mergeCells(`D${totRow.number}:E${totRow.number}`);
-      totRow.getCell(4).value = equipTotal;
-      setRight(totRow.getCell(4)); setMoney(totRow.getCell(4));
-      [1,4,6].forEach(c => { setFont(totRow.getCell(c), 11, true); setBorder(totRow.getCell(c)); });
+      totRow.getCell(1).value = "";
+      totRow.getCell(2).value = "";
+      ws.mergeCells(`C${totRow.number}:D${totRow.number}`);
+      totRow.getCell(3).value = "合　計　金　額";
+      totRow.getCell(3).alignment = { horizontal: "right" };
+      totRow.getCell(5).value = equipTotal;
+      setRight(totRow.getCell(5)); setMoney(totRow.getCell(5));
+      [1,2,3,5].forEach(c => { setFont(totRow.getCell(c), 11, true); setBorder(totRow.getCell(c)); });
 
       r++;
       ["※合計金額には、消費税は含まれていません。",
        "※レシーバー（FM無線受信機）紛失の際には補償費を申し受けます（38,000円/1台）",
       ].forEach(note => {
-        ws.mergeCells(`A${r}:F${r}`);
+        ws.mergeCells(`A${r}:E${r}`);
         ws.getCell(`A${r}`).value = note;
         setFont(ws.getCell(`A${r}`), 9);
         r++;
@@ -517,6 +619,39 @@ router.post("/export/excel", auth, async (req, res) => {
   } catch (err) {
     console.error("POST /quotes/export/excel error:", err);
     return res.status(500).json({ message: "Excel生成に失敗しました" });
+  }
+});
+
+// ── GET /api/quotes/price-master ───────────────────────────
+router.get("/price-master", auth, (req, res) => {
+  const fs   = require("fs");
+  const path = require("path");
+  const filePath = path.join(__dirname, "../data/price-master.json");
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    res.json(JSON.parse(raw));
+  } catch {
+    res.json(priceMaster);
+  }
+});
+
+// ── POST /api/quotes/price-master ──────────────────────────
+const adminAuth = require("../middleware/adminAuth");
+router.post("/price-master", auth, adminAuth, async (req, res) => {
+  try {
+    const fs   = require("fs");
+    const path = require("path");
+    const newMaster = req.body;
+    if (!Array.isArray(newMaster.interpretation) || !Array.isArray(newMaster.equipment)) {
+      return res.status(400).json({ message: "interpretation と equipment 配列が必要です" });
+    }
+    const filePath = path.join(__dirname, "../data/price-master.json");
+    await fs.promises.writeFile(filePath, JSON.stringify(newMaster, null, 2), "utf-8");
+    delete require.cache[require.resolve("../data/price-master.json")];
+    return res.json({ message: "保存しました" });
+  } catch (err) {
+    console.error("POST /quotes/price-master error:", err);
+    return res.status(500).json({ message: "保存に失敗しました" });
   }
 });
 
