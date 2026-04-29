@@ -48,10 +48,10 @@
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary { background: #111827; color: #fff; border-color: #111827; }
     .btn-primary:hover:not(:disabled) { background: #1f2937; }
-    .btn-excel { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-    .btn-excel:hover:not(:disabled) { background: #a7f3d0; }
-    .btn-pdf   { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
-    .btn-pdf:hover:not(:disabled)   { background: #fecaca; }
+    .btn-pdf      { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+    .btn-pdf:hover:not(:disabled)      { background: #fecaca; }
+    .btn-download  { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+    .btn-download:hover:not(:disabled) { background: #dbeafe; }
 
     #generateBtn { display: flex; align-items: center; gap: 8px; }
 
@@ -147,6 +147,30 @@
     }
     .mobile-menu-btn:hover { background: #f3f4f6; }
 
+    .td-drag { width: 28px; text-align: center; padding: 0 2px; }
+    .drag-handle {
+      cursor: grab; color: #9ca3af; font-size: 16px;
+      user-select: none; display: inline-block; padding: 2px 4px;
+      touch-action: none;
+    }
+    .drag-handle:active { cursor: grabbing; color: #374151; }
+    tr.dragging { opacity: 0.5; background: #dbeafe !important; }
+    tr.drag-over { outline: 2px solid #2563eb; outline-offset: -2px; }
+
+    .preset-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .preset-btn {
+      padding: 5px 12px; border-radius: 8px;
+      border: 1px solid #d1d5db; background: #f9fafb;
+      font-size: 12px; font-weight: 600; color: #374151; cursor: pointer;
+    }
+    .preset-btn:hover { background: #e5e7eb; border-color: #9ca3af; }
+
+    .split-label {
+      font-size: 13px; font-weight: 700; color: #1d4ed8;
+      padding: 6px 0 4px; border-bottom: 1px solid #dbeafe;
+      margin-bottom: 8px; margin-top: 2px;
+    }
+
     @media (max-width: 640px) {
       #hamburgerBtn { display: block; }
       header .pill { display: none; }
@@ -188,7 +212,7 @@
     <!-- 入力エリア -->
     <div class="card">
       <h2>メール本文を貼り付け</h2>
-      <textarea id="emailText" placeholder="ここにメール本文を貼り付けてください…&#10;&#10;例）&#10;いつもお世話になっております。&#10;〇〇株式会社の田中と申します。&#10;3月15日（土）の国際会議にて通訳・機材一式をご依頼したく…"></textarea>
+      <textarea id="emailText" autocomplete="off" placeholder="ここにメール本文を貼り付けてください…&#10;&#10;例）&#10;いつもお世話になっております。&#10;〇〇株式会社の田中と申します。&#10;3月15日（土）の国際会議にて通訳・機材一式をご依頼したく…"></textarea>
       <div style="display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap;">
         <button class="btn btn-primary" id="generateBtn" type="button">見積書を生成</button>
         <div class="loading" id="loading">
@@ -216,23 +240,23 @@
           </div>
           <div class="form-group">
             <label>顧客名</label>
-            <input type="text" id="fCustomer" placeholder="株式会社〇〇" />
+            <input type="text" id="fCustomer" placeholder="株式会社〇〇" autocomplete="off" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>案件名</label>
-            <input type="text" id="fProject" placeholder="国際会議 2025" />
+            <input type="text" id="fProject" placeholder="国際会議 2025" autocomplete="off" />
           </div>
           <div class="form-group">
             <label>日程</label>
-            <input type="text" id="fDate" placeholder="2025年3月15日" />
+            <input type="text" id="fDate" placeholder="2025年3月15日" autocomplete="off" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>場所</label>
-            <input type="text" id="fLocation" placeholder="東京国際フォーラム" />
+            <input type="text" id="fLocation" placeholder="東京国際フォーラム" autocomplete="off" />
           </div>
         </div>
       </div>
@@ -244,11 +268,12 @@
           <table class="items-table">
             <thead>
               <tr>
-                <th style="width:40%;">品名</th>
-                <th style="width:12%; text-align:right;">数量</th>
+                <th class="td-drag"></th>
+                <th style="width:38%;">品名</th>
+                <th style="width:11%; text-align:right;">数量</th>
                 <th style="width:10%;">単位</th>
-                <th style="width:18%; text-align:right;">単価（円）</th>
-                <th style="width:14%; text-align:right;">小計（円）</th>
+                <th style="width:17%; text-align:right;">単価（円）</th>
+                <th style="width:13%; text-align:right;">小計（円）</th>
                 <th></th>
               </tr>
             </thead>
@@ -261,22 +286,68 @@
       <!-- 機材品目 -->
       <div class="card" id="equipCard">
         <h2>機材品目</h2>
-        <div style="overflow-x:auto;">
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th style="width:40%;">品名</th>
-                <th style="width:12%; text-align:right;">数量</th>
-                <th style="width:10%;">単位</th>
-                <th style="width:18%; text-align:right;">単価（円）</th>
-                <th style="width:14%; text-align:right;">小計（円）</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="equipBody"></tbody>
-          </table>
+        <div id="equipPresetBtns" class="preset-btns"></div>
+
+        <!-- 通常モード -->
+        <div id="equipSingle">
+          <div style="overflow-x:auto;">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="td-drag"></th>
+                  <th style="width:38%;">品名</th>
+                  <th style="width:11%; text-align:right;">数量</th>
+                  <th style="width:10%;">単位</th>
+                  <th style="width:17%; text-align:right;">単価（円）</th>
+                  <th style="width:13%; text-align:right;">小計（円）</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="equipBody"></tbody>
+            </table>
+          </div>
         </div>
-        <button class="add-item-btn" id="addEquipBtn" type="button" style="margin-top:8px;">＋ 行を追加</button>
+
+        <!-- 分割モード（ブリッジ・現地配信あり） -->
+        <div id="equipSplit" style="display:none;">
+          <div class="split-label">【スタジオ】</div>
+          <div style="overflow-x:auto;">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="td-drag"></th>
+                  <th style="width:38%;">品名</th>
+                  <th style="width:11%; text-align:right;">数量</th>
+                  <th style="width:10%;">単位</th>
+                  <th style="width:17%; text-align:right;">単価（円）</th>
+                  <th style="width:13%; text-align:right;">小計（円）</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="studioBody"></tbody>
+            </table>
+          </div>
+          <button class="add-item-btn" id="addStudioBtn" type="button" style="margin-top:8px;">＋ 行を追加</button>
+
+          <div class="split-label" style="margin-top:14px;">【現地配信】</div>
+          <div style="overflow-x:auto;">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="td-drag"></th>
+                  <th style="width:38%;">品名</th>
+                  <th style="width:11%; text-align:right;">数量</th>
+                  <th style="width:10%;">単位</th>
+                  <th style="width:17%; text-align:right;">単価（円）</th>
+                  <th style="width:13%; text-align:right;">小計（円）</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="localBody"></tbody>
+            </table>
+          </div>
+          <button class="add-item-btn" id="addLocalBtn" type="button" style="margin-top:8px;">＋ 行を追加</button>
+        </div>
       </div>
 
       <!-- 合計 -->
@@ -289,8 +360,8 @@
 
       <!-- アクションボタン -->
       <div class="action-row">
-        <button class="btn btn-excel" id="excelBtn" type="button">Excel ダウンロード</button>
-        <button class="btn btn-pdf"   id="pdfBtn"   type="button">PDF ダウンロード</button>
+        <button class="btn btn-pdf"      id="pdfBtn"      type="button">📄 PDF確認</button>
+        <button class="btn btn-download" id="downloadBtn" type="button">⬇ まとめてダウンロード</button>
       </div>
 
     </div><!-- /previewArea -->

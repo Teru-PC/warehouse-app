@@ -85,6 +85,8 @@ ${emailText}
   "customerName": "顧客名（不明な場合は null）",
   "projectName": "案件名・イベント名（不明な場合は null）",
   "eventDate": "日程（例: 2025年3月15日、不明な場合は null）",
+  "startTime": "開始時刻（例：13:00、不明な場合は null）",
+  "endTime": "終了時刻（例：17:00、不明な場合は null）",
   "location": "開催都市名（例: 大阪、福岡、不明な場合は null）",
   "outsideTokyo": 出張判定ルールに基づき true / false,
   "requiresStay": 宿泊が必要な場合は true、日帰りまたは不明は false,
@@ -94,6 +96,7 @@ ${emailText}
   "transportRoute": "交通手段の経路（例: 羽田空港－那覇空港、東京駅－新大阪駅（新幹線））、不明な場合は null",
   "interpreters": 通訳者数（数値、不明な場合は 1）,
   "languages": ["言語ペア（例: 日本語-英語, 日本語-中国語, 日本語-フランス語）（不明な場合は []）"],
+  "languageCount": 言語ペア数（整数。日英のみなら 1、日英と日仏の2言語なら 2。不明な場合は 1）,
   "numDays": イベント日数（数値、不明な場合は 1）,
   "interpretationItems": [
     {
@@ -198,6 +201,9 @@ router.post("/export/excel", auth, async (req, res) => {
       location     = "",
       interpretationItems = [],
       equipmentItems      = [],
+      studioItems         = null,
+      localItems          = null,
+      isSplitMode         = false,
       discount     = 0,
       numDays      = 1,
       interpreters = 1,
@@ -476,8 +482,8 @@ router.post("/export/excel", auth, async (req, res) => {
       r1.getCell(4).value = equipTotal; setRight(r1.getCell(4)); setMoney(r1.getCell(4));
       [1,2,3,4].forEach(c => { setFont(r1.getCell(c), 10); setBorder(r1.getCell(c)); });
 
-      // 空行3行
-      for (let i = 0; i < 3; i++) {
+      // 空行2行
+      for (let i = 0; i < 2; i++) {
         const row = ws.getRow(r++);
         [1,2,3,4].forEach(c => { setFont(row.getCell(c), 10); setBorder(row.getCell(c)); });
       }
@@ -518,96 +524,107 @@ router.post("/export/excel", auth, async (req, res) => {
 
     // ── 機器明細シート ──────────────────────────────────────────
     if (type === "equipment" || type === "both") {
-      const ws = workbook.addWorksheet("機器明細");
-      ws.columns = [
-        { width: 32 }, { width: 8 }, { width: 8 }, { width: 15 }, { width: 18 },
-      ];
-
-      // タイトル
-      ws.mergeCells("A1:E1");
-      ws.getCell("A1").value = "同時通訳装置レンタル費用明細";
-      setFont(ws.getCell("A1"), 14, true);
-      ws.getCell("A1").alignment = { horizontal: "center" };
-      setBorder(ws.getCell("A1"));
-
-      // 情報テーブル
-      let r = 3;
-      const infoRows = [
-        ["会　議　名", projectName || ""],
-        ["年　月　日", eventDate   || ""],
-        ["場　　　所", location    || ""],
-        ["設　　　営", "前日"],
-        ["撤　　　去", "終了後"],
-        ["録　　　音", "無"],
-      ];
-      infoRows.forEach(([label, val]) => {
-        const row = ws.getRow(r);
-        row.getCell(1).value = label;
-        row.getCell(2).value = "：";
-        ws.mergeCells(`C${r}:E${r}`);
-        row.getCell(3).value = val;
-        row.getCell(1).font = { name: FONT_NAME, size: 10, bold: true };
-        [1,2,3].forEach(c => { setBorder(row.getCell(c)); });
-        setFont(row.getCell(2), 10); setFont(row.getCell(3), 10);
-        r++;
-      });
-
-      r++; // 空行
-
-      // 明細ヘッダー（5列、備考なし）
-      const hRow = ws.getRow(r++);
-      ["項　目", "台数", "日数", "単　価", "金　額"].forEach((h, i) => {
-        const cell = hRow.getCell(i + 1);
-        cell.value = h; setCenter(cell);
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F2F2" } };
-        setFont(cell, 10, true); setBorder(cell);
-      });
-
-      // 明細行（会場常設対応）
-      const items = Array.isArray(equipmentItems) ? equipmentItems : [];
       const nDays = Math.max(1, numVal(numDays));
-      let equipTotal = 0;
-      items.forEach(it => {
-        const row = ws.getRow(r++);
-        row.getCell(1).value = it.name || "";
-        if (it.venueEquipment) {
-          ws.mergeCells(`B${row.number}:D${row.number}`);
-          row.getCell(2).value = "会場常設を使用";
-          setCenter(row.getCell(2));
-          row.getCell(5).value = 0;
-          setRight(row.getCell(5)); setMoney(row.getCell(5));
-        } else {
-          const qty    = Math.max(1, numVal(it.quantity));
-          const amount = qty * nDays * numVal(it.unitPrice);
-          equipTotal  += amount;
-          row.getCell(2).value = qty;   setCenter(row.getCell(2));
-          row.getCell(3).value = nDays; setCenter(row.getCell(3));
-          row.getCell(4).value = numVal(it.unitPrice); setRight(row.getCell(4)); setMoney(row.getCell(4));
-          row.getCell(5).value = amount;               setRight(row.getCell(5)); setMoney(row.getCell(5));
-        }
-        [1,2,3,4,5].forEach(c => { setFont(row.getCell(c), 10); setBorder(row.getCell(c)); });
-      });
 
-      // 合計行（小計エリアと同位置に合わせる）
-      const totRow = ws.getRow(r++);
-      totRow.getCell(1).value = "";
-      totRow.getCell(2).value = "";
-      ws.mergeCells(`C${totRow.number}:D${totRow.number}`);
-      totRow.getCell(3).value = "合　計　金　額";
-      totRow.getCell(3).alignment = { horizontal: "right" };
-      totRow.getCell(5).value = equipTotal;
-      setRight(totRow.getCell(5)); setMoney(totRow.getCell(5));
-      [1,2,3,5].forEach(c => { setFont(totRow.getCell(c), 11, true); setBorder(totRow.getCell(c)); });
+      function buildDetailSheet(itemsList, sheetSuffix) {
+        const sheetName = sheetSuffix ? `機器明細(${sheetSuffix})` : "機器明細";
+        const titleText = "同時通訳装置レンタル費用明細" + (sheetSuffix ? `（${sheetSuffix}）` : "");
+        const ws = workbook.addWorksheet(sheetName);
+        ws.columns = [
+          { width: 32 }, { width: 8 }, { width: 8 }, { width: 15 }, { width: 18 },
+        ];
 
-      r++;
-      ["※合計金額には、消費税は含まれていません。",
-       "※レシーバー（FM無線受信機）紛失の際には補償費を申し受けます（38,000円/1台）",
-      ].forEach(note => {
-        ws.mergeCells(`A${r}:E${r}`);
-        ws.getCell(`A${r}`).value = note;
-        setFont(ws.getCell(`A${r}`), 9);
+        ws.mergeCells("A1:E1");
+        ws.getCell("A1").value = titleText;
+        setFont(ws.getCell("A1"), 14, true);
+        ws.getCell("A1").alignment = { horizontal: "center" };
+        setBorder(ws.getCell("A1"));
+
+        let r = 3;
+        const infoRows = [
+          ["会　議　名", projectName || ""],
+          ["年　月　日", eventDate   || ""],
+          ["場　　　所", location    || ""],
+          ["設　　　営", "前日"],
+          ["撤　　　去", "終了後"],
+          ["録　　　音", "無"],
+        ];
+        infoRows.forEach(([label, val]) => {
+          const row = ws.getRow(r);
+          row.getCell(1).value = label;
+          row.getCell(2).value = "：";
+          ws.mergeCells(`C${r}:E${r}`);
+          row.getCell(3).value = val;
+          row.getCell(1).font = { name: FONT_NAME, size: 10, bold: true };
+          [1,2,3].forEach(c => { setBorder(row.getCell(c)); });
+          setFont(row.getCell(2), 10); setFont(row.getCell(3), 10);
+          r++;
+        });
+
         r++;
-      });
+
+        const hRow = ws.getRow(r++);
+        ["項　目", "台数", "日数", "単　価", "金　額"].forEach((h, i) => {
+          const cell = hRow.getCell(i + 1);
+          cell.value = h; setCenter(cell);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F2F2" } };
+          setFont(cell, 10, true); setBorder(cell);
+        });
+
+        let equipTotal = 0;
+        (Array.isArray(itemsList) ? itemsList : []).forEach(it => {
+          const row = ws.getRow(r++);
+          row.getCell(1).value = it.name || "";
+          if (it.venueEquipment) {
+            ws.mergeCells(`B${row.number}:D${row.number}`);
+            row.getCell(2).value = "会場常設を使用";
+            setCenter(row.getCell(2));
+            row.getCell(5).value = 0;
+            setRight(row.getCell(5)); setMoney(row.getCell(5));
+          } else {
+            const qty    = Math.max(1, numVal(it.quantity));
+            const amount = qty * nDays * numVal(it.unitPrice);
+            equipTotal  += amount;
+            row.getCell(2).value = qty;   setCenter(row.getCell(2));
+            row.getCell(3).value = nDays; setCenter(row.getCell(3));
+            row.getCell(4).value = numVal(it.unitPrice); setRight(row.getCell(4)); setMoney(row.getCell(4));
+            row.getCell(5).value = amount;               setRight(row.getCell(5)); setMoney(row.getCell(5));
+          }
+          [1,2,3,4,5].forEach(c => { setFont(row.getCell(c), 10); setBorder(row.getCell(c)); });
+        });
+
+        for (let i = 0; i < 2; i++) {
+          const emptyRow = ws.getRow(r++);
+          [1,2,3,4,5].forEach(c => { setFont(emptyRow.getCell(c), 10); setBorder(emptyRow.getCell(c)); });
+        }
+
+        const totRow = ws.getRow(r++);
+        totRow.getCell(1).value = "";
+        totRow.getCell(2).value = "";
+        ws.mergeCells(`C${totRow.number}:D${totRow.number}`);
+        totRow.getCell(3).value = "合　計　金　額";
+        totRow.getCell(3).alignment = { horizontal: "right" };
+        totRow.getCell(5).value = equipTotal;
+        setRight(totRow.getCell(5)); setMoney(totRow.getCell(5));
+        [1,2,3,5].forEach(c => { setFont(totRow.getCell(c), 11, true); setBorder(totRow.getCell(c)); });
+
+        r++;
+        ["※合計金額には、消費税は含まれていません。",
+         "※レシーバー（FM無線受信機）紛失の際には補償費を申し受けます（38,000円/1台）",
+        ].forEach(note => {
+          ws.mergeCells(`A${r}:E${r}`);
+          ws.getCell(`A${r}`).value = note;
+          setFont(ws.getCell(`A${r}`), 9);
+          r++;
+        });
+      }
+
+      if (isSplitMode && Array.isArray(studioItems) && Array.isArray(localItems)) {
+        buildDetailSheet(studioItems, "スタジオ");
+        buildDetailSheet(localItems,  "現地配信");
+      } else {
+        buildDetailSheet(Array.isArray(equipmentItems) ? equipmentItems : [], "");
+      }
     }
 
     const filename = `見積書_${customerName || "未設定"}_${eventDate || ""}.xlsx`;

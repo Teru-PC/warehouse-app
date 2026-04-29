@@ -8,7 +8,7 @@
     { "id": "interp_secondary",  "name": "通訳音声二次使用料",   "unit": "式",      "unitPrice": 0 }
   ],
   "equipment": [
-    { "id": "eq_fm_tx",          "name": "FM無線送信機",             "unit": "台/日",   "unitPrice": 3000 },
+    { "id": "eq_fm_tx",          "name": "FM無線送信機",             "unit": "台/日",   "unitPrice": 2000 },
     { "id": "eq_fm_rx",          "name": "FM無線受信機",             "unit": "台/日",   "unitPrice": 1000 },
     { "id": "eq_ir_tx",          "name": "赤外線送信機+輻射機",      "unit": "式/日",   "unitPrice": 35000 },
     { "id": "eq_ir_rx",          "name": "赤外線受信機",             "unit": "台/日",   "unitPrice": 700 },
@@ -38,8 +38,8 @@
     { "id": "eq_studio",         "name": "スタジオ使用料",           "unit": "式/時間", "unitPrice": 10000 },
     { "id": "eq_engineer_chief", "name": "チーフエンジニア",         "unit": "名/日",   "unitPrice": 35000 },
     { "id": "eq_engineer_asst",  "name": "アシスタントエンジニア",   "unit": "名/日",   "unitPrice": 30000 },
-    { "id": "eq_setup",          "name": "設営・撤去費",             "unit": "式/回",   "unitPrice": 40000 },
-    { "id": "eq_transport",      "name": "機材運搬費",               "unit": "式/回",   "unitPrice": 35000 },
+    { "id": "eq_setup",          "name": "設営・撤去費",             "unit": "式/回",   "unitPrice": 30000 },
+    { "id": "eq_transport",      "name": "機材運搬費",               "unit": "式/回",   "unitPrice": 30000 },
     { "id": "eq_recording",      "name": "録音",                     "unit": "系統/日", "unitPrice": 6000 },
     { "id": "eq_zoom_rec",       "name": "Zoom録画",                 "unit": "系統/日", "unitPrice": 15000 }
   ]

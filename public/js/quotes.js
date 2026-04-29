@@ -5,11 +5,208 @@
     return;
   }
 
+  // ── 会場常設チェックを表示できる品目パターン ─────────────
+  // 常時「常設」チェック済み（venueEquipment）
+  const VENUE_EQUIPMENT_PATTERNS = ['無線マイク', '有線マイク', 'スピーカー'];
+  // 常設に切り替え可能（venueCheckable・初期は未チェック）
+  const VENUE_CHECKABLE_PATTERNS = [
+    '同時通訳ブース', '簡易卓上ブース', '音響ミキサー', '通訳ユニット',
+  ];
+  function isVenueCheckable(name) {
+    return VENUE_CHECKABLE_PATTERNS.some(p => (name || '').includes(p));
+  }
+  function isVenueEquipment(name) {
+    return VENUE_EQUIPMENT_PATTERNS.some(p => (name || '').includes(p));
+  }
+
+  // ── プリセットデータ ──────────────────────────────────────
+  const PRESETS = {
+    local: {
+      name: '現地のみ',
+      items: [
+        { name: '通訳ユニット',           quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
+        { name: '簡易卓上ブース',         quantity: 1, unit: '台/日', unitPrice: 0,     venueCheckable: true },
+        { name: 'FM無線送信機',           quantity: 2, unit: '台/日', unitPrice: 2000 },
+        { name: 'FM無線受信機',           quantity: 1, unit: '台/日', unitPrice: 1000 },
+        { name: '音響ミキサー（小）',     quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
+        { name: '無線マイク',             quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
+        { name: '有線マイク',             quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
+        { name: 'スピーカー・音響設備',   quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
+        { name: 'チーフエンジニア',       quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: '機材運搬費',             quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: '設営・撤去費',           quantity: 1, unit: '式',    unitPrice: 30000 },
+        { empty: true }, { empty: true },
+      ],
+    },
+    online: {
+      name: 'オンライン',
+      items: [
+        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
+        { name: 'オーディオインターフェイス', quantity: 3, unit: '台/日', unitPrice: 2000 },
+        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式',    unitPrice: 10000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
+        { name: 'スタジオ使用料',             quantity: 1, unit: '時間',  unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { empty: true }, { empty: true },
+      ],
+    },
+    bridge: {
+      name: 'ブリッジ',
+      split: true,
+      studioItems: [
+        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
+        { name: 'オーディオインターフェイス', quantity: 3, unit: '台/日', unitPrice: 2000 },
+        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式',    unitPrice: 10000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
+        { name: 'スタジオ使用料',             quantity: 1, unit: '時間',  unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+      ],
+      localItems: [
+        { name: 'オンライン接続用PC',         quantity: 2, unit: '台/日', unitPrice: 7000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
+        { name: 'FM無線送信機',               quantity: 2, unit: '台/日', unitPrice: 2000 },
+        { name: 'FM無線受信機',               quantity: 1, unit: '台/日', unitPrice: 1000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: '機材運搬費',                 quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: '設営・撤去費',               quantity: 1, unit: '式',    unitPrice: 30000 },
+        { empty: true }, { empty: true },
+      ],
+    },
+    localStream: {
+      name: '現地配信あり',
+      split: true,
+      studioItems: [
+        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
+        { name: 'オーディオインターフェイス', quantity: 3, unit: '台/日', unitPrice: 2000 },
+        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式',    unitPrice: 10000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
+        { name: 'スタジオ使用料',             quantity: 1, unit: '時間',  unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+      ],
+      localItems: [
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
+        { name: 'FM無線送信機',               quantity: 2, unit: '台/日', unitPrice: 2000 },
+        { name: 'FM無線受信機',               quantity: 1, unit: '台/日', unitPrice: 1000 },
+        { name: 'ビデオカメラ',               quantity: 2, unit: '台/日', unitPrice: 25000 },
+        { name: '映像スイッチャー',           quantity: 1, unit: '台/日', unitPrice: 25000 },
+        { name: 'カメラ備品',                 quantity: 1, unit: '式',    unitPrice: 5000 },
+        { name: 'モニター（カメラ用）',       quantity: 1, unit: '台/日', unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: 'アシスタントエンジニア',     quantity: 1, unit: '名/日', unitPrice: 30000 },
+        { name: '機材運搬費',                 quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: '設営・撤去費',               quantity: 1, unit: '式',    unitPrice: 30000 },
+        { empty: true }, { empty: true },
+      ],
+    },
+    ram: {
+      name: 'ラムに依頼',
+      items: [
+        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
+        { name: '同時通訳ブース',             quantity: 1, unit: '台/日', unitPrice: 0,     venueCheckable: true },
+        { name: '赤外線送信機＋ラジエター',   quantity: 1, unit: '式',    unitPrice: 0 },
+        { name: '赤外線受信機',               quantity: 1, unit: '台/日', unitPrice: 0 },
+        { name: '音響ミキサー（大）',         quantity: 1, unit: '台/日', unitPrice: 0,     venueCheckable: true },
+        { name: '無線マイク',                 quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
+        { name: '有線マイク',                 quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
+        { name: 'スピーカー・音響設備',       quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: 'アシスタントエンジニア',     quantity: 1, unit: '名/日', unitPrice: 30000 },
+        { name: '機材運搬費',                 quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: '設営・撤去費',               quantity: 1, unit: '式',    unitPrice: 30000 },
+        { empty: true }, { empty: true },
+      ],
+    },
+  };
+
+  // ── 通訳品目：旅費系はPDFで自動生成のため除外 ────────────
+  const TRAVEL_ITEM_NAMES = ['移動拘束費', '日当', '交通費', '宿泊費', '旅費'];
+  function filterInterpItems(items) {
+    return (items || []).filter(it => !TRAVEL_ITEM_NAMES.some(n => it.name.includes(n)));
+  }
+
+  // ── 通訳料の単価を言語に応じて設定 ──────────────────────
+  function applyInterpPricing(items, languages) {
+    const isEnglish = (languages || []).some(l => /英/.test(l));
+    const halfDayPrice = isEnglish ? 62000 : 65000;
+    const fullDayPrice = isEnglish ? 95000 : 99000;
+    return (items || []).map(it => {
+      const name = it.name || '';
+      let price = Number(it.unitPrice) || 0;
+      if (/半日/.test(name)) price = halfDayPrice;
+      else if (/1日|一日/.test(name)) price = fullDayPrice;
+      const qty = Number(it.quantity) || 0;
+      const sub = it.venueEquipment ? 0 : qty * price;
+      return Object.assign({}, it, { unitPrice: price, subtotal: sub });
+    });
+  }
+
+  // ── AI生成機材品目に venue フラグを付与 ──────────────────
+  function markVenueCheckable(items) {
+    return (items || []).map(it => {
+      const name = it.name || '';
+      if (!it.venueEquipment && isVenueEquipment(name)) {
+        return Object.assign({}, it, { venueEquipment: true });
+      }
+      if (!it.venueEquipment && !it.venueCheckable && isVenueCheckable(name)) {
+        return Object.assign({}, it, { venueCheckable: true });
+      }
+      return it;
+    });
+  }
+
+  // ── AI生成機材品目を正規化（フィルタ・名称統一）────────────
+  const EQUIP_FILTER_NAMES = ['スピーカー（小型）', 'アシスタントエンジニア'];
+  function normalizeEquipItems(items) {
+    return (items || [])
+      .filter(it => !EQUIP_FILTER_NAMES.some(f => (it.name || '').includes(f)))
+      .map(it => {
+        let name = it.name || '';
+        if (name.includes('同時通訳ブース')) name = name.replace('同時通訳ブース', '簡易卓上ブース');
+        return name === it.name ? it : Object.assign({}, it, { name });
+      });
+  }
+
+  // ── 機材品目の重複除去（同名は単価の高い方を残す）────────
+  function deduplicateEquipItems(items) {
+    const seen = new Map();
+    const result = [];
+    (items || []).forEach(item => {
+      if (item.empty) { result.push(item); return; }
+      const name = (item.name || '').trim();
+      if (!name) { result.push(item); return; }
+      if (!seen.has(name)) {
+        seen.set(name, result.length);
+        result.push(item);
+      } else {
+        const idx = seen.get(name);
+        if ((Number(item.unitPrice) || 0) > (Number(result[idx].unitPrice) || 0)) {
+          result[idx] = item;
+        }
+      }
+    });
+    return result;
+  }
+
+  // ── ファイル名生成 ─────────────────────────────────────────
+  function buildFileName(d) {
+    const unsafe   = /[/\\:*?"<>|]/g;
+    const customer = (d.customerName || '').replace(unsafe, '_');
+    const date     = (d.eventDate    || '').replace(unsafe, '_');
+    const project  = (d.projectName  || '').replace(unsafe, '_');
+    return `【御見積書】${customer}御中_${date}_${project}`;
+  }
+
   // ── 価格マスタをフェッチしてオートコンプリート用datalistを作成 ──
+  let priceMasterData = null;
   fetch('/api/quotes/price-master', { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
       if (!data) return;
+      priceMasterData = data;
       const names = [
         ...(data.interpretation || []).map(i => i.name),
         ...(data.equipment || []).map(i => i.name),
@@ -45,13 +242,27 @@
   const equipCard     = document.getElementById('equipCard');
   const equipBody     = document.getElementById('equipBody');
   const addEquipBtn   = document.getElementById('addEquipBtn');
+  const equipSingle   = document.getElementById('equipSingle');
+  const equipSplit    = document.getElementById('equipSplit');
+  const studioBody    = document.getElementById('studioBody');
+  const localBody     = document.getElementById('localBody');
+  const addStudioBtn  = document.getElementById('addStudioBtn');
+  const addLocalBtn   = document.getElementById('addLocalBtn');
 
   const totalAmountEl = document.getElementById('totalAmount');
-  const excelBtn      = document.getElementById('excelBtn');
   const pdfBtn        = document.getElementById('pdfBtn');
+  const downloadBtn   = document.getElementById('downloadBtn');
 
   // ── 状態 ─────────────────────────────────────────────────
-  let quoteData = null;
+  let quoteData   = null;
+  let isSplitMode = false;
+
+  // ── 機材品目の表示モード切替 ──────────────────────────────
+  function setEquipMode(split) {
+    isSplitMode = split;
+    equipSingle.style.display = split ? 'none' : '';
+    equipSplit.style.display  = split ? '' : 'none';
+  }
 
   // ── ユーティリティ ───────────────────────────────────────
   function showError(msg) {
@@ -73,6 +284,15 @@
       .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
+  const DOW_JP = ['日', '月', '火', '水', '木', '金', '土'];
+  function addDayOfWeek(dateStr) {
+    if (!dateStr || /日（[月火水木金土日]）/.test(dateStr)) return dateStr;
+    return dateStr.replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/, function(_, y, m, d) {
+      const dow = DOW_JP[new Date(Number(y), Number(m) - 1, Number(d)).getDay()];
+      return y + '年' + m + '月' + d + '日（' + dow + '）';
+    });
+  }
+
   // ── typeに応じてカード表示切替 ────────────────────────────
   function updateCardVisibility() {
     const t = fType.value;
@@ -90,15 +310,93 @@
   }
   fType.addEventListener('change', updateCardVisibility);
 
+  // ── ドラッグ&ドロップ ─────────────────────────────────────
+  function initDragDrop(tbody) {
+    let dragSrc  = null;
+    let touchSrc = null;
+
+    tbody.addEventListener('dragstart', e => {
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) { e.preventDefault(); return; }
+      dragSrc = handle.closest('tr');
+      dragSrc.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', '');
+    });
+    tbody.addEventListener('dragover', e => {
+      if (!dragSrc) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const target = e.target.closest('tr');
+      if (!target || target === dragSrc || !tbody.contains(target)) return;
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      target.classList.add('drag-over');
+    });
+    tbody.addEventListener('dragleave', e => {
+      if (!e.relatedTarget || !tbody.contains(e.relatedTarget)) {
+        tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      }
+    });
+    tbody.addEventListener('drop', e => {
+      e.preventDefault();
+      const target = e.target.closest('tr');
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      if (!target || target === dragSrc || !tbody.contains(target)) return;
+      const rows = [...tbody.querySelectorAll('tr')];
+      const srcIdx = rows.indexOf(dragSrc);
+      const tgtIdx = rows.indexOf(target);
+      if (srcIdx < tgtIdx) target.after(dragSrc);
+      else target.before(dragSrc);
+    });
+    tbody.addEventListener('dragend', () => {
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('dragging', 'drag-over'));
+      dragSrc = null;
+    });
+    tbody.addEventListener('touchstart', e => {
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+      touchSrc = handle.closest('tr');
+      touchSrc.classList.add('dragging');
+      e.preventDefault();
+    }, { passive: false });
+    tbody.addEventListener('touchmove', e => {
+      if (!touchSrc) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = el ? el.closest('tr') : null;
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      if (target && target !== touchSrc && tbody.contains(target)) target.classList.add('drag-over');
+    }, { passive: false });
+    tbody.addEventListener('touchend', e => {
+      if (!touchSrc) return;
+      const touch = e.changedTouches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = el ? el.closest('tr') : null;
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('dragging', 'drag-over'));
+      if (target && target !== touchSrc && tbody.contains(target)) {
+        const rows = [...tbody.querySelectorAll('tr')];
+        const srcIdx = rows.indexOf(touchSrc);
+        const tgtIdx = rows.indexOf(target);
+        if (srcIdx < tgtIdx) target.after(touchSrc);
+        else target.before(touchSrc);
+      }
+      touchSrc = null;
+    });
+  }
+
   // ── 品目行を追加 ──────────────────────────────────────────
-  function addItemRow(tbody, item, isEquip) {
+  function addItemRow(tbody, item, isEquip, insertBefore) {
     item = item || { name: '', quantity: 1, unit: '式', unitPrice: 0 };
     const isVenue = isEquip && Boolean(item.venueEquipment);
+    // 会場常設チェックを表示するか（明示フラグ または 名前パターン）
+    const showVenueCheck = isEquip && (Boolean(item.venueEquipment) || Boolean(item.venueCheckable));
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td class="td-drag"><span class="drag-handle" draggable="true" title="ドラッグして並び替え">⠿</span></td>
       <td class="td-name"><input type="text" class="name-input" value="${esc(item.name)}" placeholder="品名" list="itemNameList" /></td>
       <td>
-        ${isEquip ? `<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+        ${showVenueCheck ? `<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap;">
           <input type="checkbox" class="venue-check" ${isVenue ? 'checked' : ''}>常設
         </label>` : ''}
         <input type="number" class="qty-input" value="${Number(item.quantity) || 1}" min="0" style="width:60px;${isVenue ? 'display:none;' : ''}" />
@@ -108,6 +406,8 @@
       <td class="td-sub">${isVenue ? fmt(0) : fmt(calcSubtotal(item.quantity, item.unitPrice))}</td>
       <td class="td-del"><button class="del-btn" type="button" title="削除">×</button></td>
     `;
+    const nameIn  = tr.querySelector('.name-input');
+    const unitIn  = tr.querySelector('.unit-input');
     const qtyIn   = tr.querySelector('.qty-input');
     const priceIn = tr.querySelector('.price-input');
     function updateSub() {
@@ -119,7 +419,7 @@
       }
       recalcTotal();
     }
-    if (isEquip) {
+    if (showVenueCheck) {
       const venueChk = tr.querySelector('.venue-check');
       venueChk.addEventListener('change', () => {
         qtyIn.style.display = venueChk.checked ? 'none' : '';
@@ -128,20 +428,86 @@
     }
     qtyIn.addEventListener('input', updateSub);
     priceIn.addEventListener('input', updateSub);
+    nameIn.addEventListener('change', () => {
+      if (!priceMasterData) return;
+      const allMaster = [...(priceMasterData.interpretation || []), ...(priceMasterData.equipment || [])];
+      const match = allMaster.find(m => m.name === nameIn.value);
+      if (match) { priceIn.value = match.unitPrice; unitIn.value = match.unit; updateSub(); }
+    });
     tr.querySelector('.del-btn').addEventListener('click', () => { tr.remove(); recalcTotal(); });
+    if (insertBefore) tbody.insertBefore(tr, insertBefore);
+    else tbody.appendChild(tr);
+  }
+
+  // ── 空行を追加 ────────────────────────────────────────────
+  function addEmptyRow(tbody) {
+    const tr = document.createElement('tr');
+    tr.style.height = '22px';
+    tr.innerHTML = '<td class="td-drag"></td><td colspan="5"></td><td></td>';
     tbody.appendChild(tr);
   }
 
-  function renderTable(tbody, items, isEquip) {
+  // ── 管理費行を追加（通訳テーブル末尾）──────────────────────
+  function addMgmtFeeRow(tbody) {
+    const tr = document.createElement('tr');
+    tr.className = 'mgmt-fee-row';
+    tr.style.background = '#f9fafb';
+    tr.innerHTML =
+      '<td class="td-drag"></td>' +
+      '<td class="td-name" style="font-weight:600;color:#374151;">管理費</td>' +
+      '<td></td>' +
+      '<td colspan="2" style="text-align:center;font-size:11px;color:#9ca3af;font-style:italic;padding:5px 8px;">上記通訳料合計の10%</td>' +
+      '<td class="td-sub" style="color:#374151;"></td>' +
+      '<td></td>';
+    tbody.appendChild(tr);
+  }
+
+  // ── テーブルを描画 ────────────────────────────────────────
+  function renderTable(tbody, items, isEquip, opts) {
+    opts = opts || {};
     tbody.innerHTML = '';
-    (items || []).forEach(item => addItemRow(tbody, item, isEquip));
+    if (isEquip && opts.addDefaults) {
+      // 言語数が3以上の場合のみ通訳ユニットを言語数分に増やす（2言語以下は常に1台）
+      const langCount = Math.max(1, Number(opts.languageCount) || 1);
+      const unitQty   = langCount >= 3 ? langCount : 1;
+      // 正規化済みAI品目をスロットにマッピングして決まった順で描画
+      const slots = [
+        { kw: 'ブース',           def: { name: '簡易卓上ブース',       quantity: 1,       unit: '台/日', unitPrice: 0,     venueCheckable: true } },
+        { kw: '通訳ユニット',     def: { name: '通訳ユニット',         quantity: unitQty, unit: '台/日', unitPrice: 18000, venueCheckable: true } },
+        { kw: 'FM無線送信機',     def: { name: 'FM無線送信機',         quantity: 2,       unit: '台/日', unitPrice: 2000 } },
+        { kw: 'FM無線受信機',     def: { name: 'FM無線受信機',         quantity: 1,       unit: '台/日', unitPrice: 1000 } },
+        { kw: '音響ミキサー',     def: { name: '音響ミキサー（小）',   quantity: 1,       unit: '台/日', unitPrice: 15000, venueCheckable: true } },
+        { kw: '無線マイク',       def: { name: '無線マイク',           quantity: 1,       unit: '式',    unitPrice: 0,     venueEquipment: true } },
+        { kw: '有線マイク',       def: { name: '有線マイク',           quantity: 1,       unit: '式',    unitPrice: 0,     venueEquipment: true } },
+        { kw: 'スピーカー',       def: { name: 'スピーカー・音響設備', quantity: 1,       unit: '式',    unitPrice: 0,     venueEquipment: true } },
+        { kw: 'チーフエンジニア', def: { name: 'チーフエンジニア',     quantity: 1,       unit: '名/日', unitPrice: 35000 } },
+        { kw: '機材運搬費',       def: { name: '機材運搬費',           quantity: 1,       unit: '式',    unitPrice: 30000 } },
+        { kw: '設営',             def: { name: '設営・撤去費',         quantity: 1,       unit: '式/回', unitPrice: 30000 } },
+      ];
+      // ヘッドフォンアンプはデフォルト表示から除外（手動追加のみ）
+      const aiItems  = (items || []).filter(it => !it.empty && !(it.name || '').includes('ヘッドフォンアンプ'));
+      const usedAiIdx = new Set();
+      slots.forEach(slot => {
+        const idx = aiItems.findIndex((it, i) => !usedAiIdx.has(i) && (it.name || '').includes(slot.kw));
+        if (idx !== -1) { usedAiIdx.add(idx); addItemRow(tbody, aiItems[idx], true); }
+        else             { addItemRow(tbody, slot.def, true); }
+      });
+      // スロット未マッチのAI品目を末尾に追加
+      aiItems.forEach((it, i) => { if (!usedAiIdx.has(i)) addItemRow(tbody, it, true); });
+    } else {
+      (items || []).forEach(item => {
+        if (!item.empty) addItemRow(tbody, item, isEquip);
+      });
+    }
   }
 
   // ── 合計を再計算 ──────────────────────────────────────────
   function recalcTotal() {
     let total = 0;
-    function sumTable(tbody) {
-      tbody.querySelectorAll('tr').forEach(tr => {
+
+    if (interpCard.style.display !== 'none') {
+      let interpSum = 0;
+      interpBody.querySelectorAll('tr:not(.mgmt-fee-row)').forEach(tr => {
         const venueChk = tr.querySelector('.venue-check');
         if (venueChk && venueChk.checked) {
           tr.querySelector('.td-sub').textContent = fmt(0);
@@ -152,11 +518,33 @@
         if (!qtyIn || !priceIn) return;
         const sub = calcSubtotal(qtyIn.value, priceIn.value);
         tr.querySelector('.td-sub').textContent = fmt(sub);
-        total += sub;
+        interpSum += sub;
+      });
+      const mgmtFee = Math.round(interpSum * 0.1);
+      const mgmtRow = interpBody.querySelector('.mgmt-fee-row');
+      if (mgmtRow) mgmtRow.querySelector('.td-sub').textContent = fmt(mgmtFee);
+      total += interpSum + mgmtFee;
+    }
+
+    if (equipCard.style.display !== 'none') {
+      const equipBodies = isSplitMode ? [studioBody, localBody] : [equipBody];
+      equipBodies.forEach(body => {
+        body.querySelectorAll('tr').forEach(tr => {
+          const venueChk = tr.querySelector('.venue-check');
+          if (venueChk && venueChk.checked) {
+            tr.querySelector('.td-sub').textContent = fmt(0);
+            return;
+          }
+          const qtyIn   = tr.querySelector('.qty-input');
+          const priceIn = tr.querySelector('.price-input');
+          if (!qtyIn || !priceIn) return;
+          const sub = calcSubtotal(qtyIn.value, priceIn.value);
+          tr.querySelector('.td-sub').textContent = fmt(sub);
+          total += sub;
+        });
       });
     }
-    if (interpCard.style.display !== 'none') sumTable(interpBody);
-    if (equipCard.style.display  !== 'none') sumTable(equipBody);
+
     totalAmountEl.textContent = fmt(total);
   }
 
@@ -185,7 +573,16 @@
 
   function collectData() {
     const interpretationItems = collectTableItems(interpBody);
-    const equipmentItems      = collectTableItems(equipBody);
+    let equipmentItems, studioItems, localItems;
+    if (isSplitMode) {
+      studioItems    = collectTableItems(studioBody);
+      localItems     = collectTableItems(localBody);
+      equipmentItems = studioItems.concat(localItems);
+    } else {
+      equipmentItems = collectTableItems(equipBody);
+      studioItems    = null;
+      localItems     = null;
+    }
     const allItems = interpretationItems.concat(equipmentItems);
     return {
       type:               fType.value,
@@ -195,6 +592,9 @@
       location:           fLocation ? fLocation.value : ((quoteData && quoteData.location) || ''),
       interpretationItems,
       equipmentItems,
+      studioItems,
+      localItems,
+      isSplitMode,
       items:              allItems,
       totalAmount:        allItems.reduce((s, it) => s + it.subtotal, 0),
       rawEmail:           emailTextEl.value,
@@ -204,6 +604,7 @@
       outsideTokyo:       Boolean(quoteData && quoteData.outsideTokyo),
       isTaxExempt:        Boolean(quoteData && quoteData.isTaxExempt),
       languages:          (quoteData && quoteData.languages) || [],
+      languageCount:      Number((quoteData && quoteData.languageCount) || 1),
       requiresStay:       Boolean(quoteData && quoteData.requiresStay),
       preDayEntry:        Boolean(quoteData && quoteData.preDayEntry),
       workingHours:       Number((quoteData && quoteData.workingHours) || 0),
@@ -233,16 +634,30 @@
 
       quoteData = data;
 
-      fType.value    = data.type        || 'both';
+      fType.value     = data.type         || 'both';
       fCustomer.value = data.customerName || '';
       fProject.value  = data.projectName  || '';
-      fDate.value     = data.eventDate    || '';
+      const timeStr = data.startTime
+        ? ' ' + data.startTime + (data.endTime ? '〜' + data.endTime : '')
+        : '';
+      fDate.value = addDayOfWeek((data.eventDate || '') + timeStr);
       if (fLocation) fLocation.value = data.location || '';
 
-      renderTable(interpBody, data.interpretationItems || [], false);
-      renderTable(equipBody,  data.equipmentItems      || [], true);
-      updateCardVisibility();
+      // 通訳品目：旅費系除外 → 言語別単価設定 → 管理費行追加
+      const filteredInterp = filterInterpItems(data.interpretationItems);
+      const pricedInterp   = applyInterpPricing(filteredInterp, data.languages);
+      renderTable(interpBody, pricedInterp, false);
+      addMgmtFeeRow(interpBody);
 
+      // 機材品目：正規化 → venueフラグ付与 → 重複除去 → 描画（AI生成時は常に通常モード）
+      setEquipMode(false);
+      const normalizedEquip = normalizeEquipItems(data.equipmentItems || []);
+      const markedEquip     = markVenueCheckable(normalizedEquip);
+      const dedupedEquip    = deduplicateEquipItems(markedEquip);
+      const langCount       = data.languageCount || (data.languages ? data.languages.length : 1);
+      renderTable(equipBody, dedupedEquip, true, { addDefaults: true, languageCount: langCount });
+
+      updateCardVisibility();
       previewArea.style.display = 'block';
       previewArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
@@ -254,41 +669,46 @@
   });
 
   // ── 行追加ボタン ──────────────────────────────────────────
-  addInterpBtn.addEventListener('click', () => addItemRow(interpBody, null, false));
-  addEquipBtn.addEventListener('click',  () => addItemRow(equipBody,  null, true));
-
-  // ── Excel ダウンロード（サーバーサイド xlsx）─────────────
-  excelBtn.addEventListener('click', async () => {
-    const d = collectData();
-    try {
-      excelBtn.disabled = true;
-      const res = await fetch('/api/quotes/export/excel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(d),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        showError('Excel生成に失敗しました: ' + (err.message || res.status));
-        return;
-      }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `見積書_${d.customerName || '未設定'}_${d.eventDate || ''}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      showError('通信エラーが発生しました: ' + err.message);
-    } finally {
-      excelBtn.disabled = false;
-    }
+  addInterpBtn.addEventListener('click', () => {
+    const mgmtRow = interpBody.querySelector('.mgmt-fee-row');
+    addItemRow(interpBody, null, false, mgmtRow || undefined);
   });
+  if (addEquipBtn)  addEquipBtn.addEventListener('click',  () => addItemRow(equipBody,  null, true));
+  if (addStudioBtn) addStudioBtn.addEventListener('click', () => addItemRow(studioBody, null, true));
+  if (addLocalBtn)  addLocalBtn.addEventListener('click',  () => addItemRow(localBody,  null, true));
 
-  // ── PDF ダウンロード ──────────────────────────────────────
-  pdfBtn.addEventListener('click', () => {
-    const d              = collectData();
+  // ── プリセットボタン ──────────────────────────────────────
+  const presetBtnsEl = document.getElementById('equipPresetBtns');
+  if (presetBtnsEl) {
+    Object.values(PRESETS).forEach(preset => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'preset-btn';
+      btn.textContent = preset.name;
+      btn.addEventListener('click', () => {
+        if (!confirm('現在の機材品目をクリアして読み込みますか？')) return;
+        if (preset.split) {
+          setEquipMode(true);
+          renderTable(studioBody, preset.studioItems, true);
+          renderTable(localBody,  preset.localItems,  true);
+        } else {
+          setEquipMode(false);
+          renderTable(equipBody, preset.items, true);
+        }
+        recalcTotal();
+      });
+      presetBtnsEl.appendChild(btn);
+    });
+  }
+
+  // ── ドラッグ&ドロップ初期化 ───────────────────────────────
+  initDragDrop(interpBody);
+  initDragDrop(equipBody);
+  initDragDrop(studioBody);
+  initDragDrop(localBody);
+
+  // ── PDF生成（プレビュー・ダウンロード共通）────────────────
+  function buildAndPrintPDF(d) {
     const locStr         = d.location;
     const interpreters   = d.interpreters;
     const discount       = d.discount;
@@ -304,7 +724,6 @@
     const now = new Date();
     const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
 
-    // 金額フォーマット
     function fmtYen(n)     { return (Number(n) || 0).toLocaleString('ja-JP') + '円'; }
     function fmtAt(n)      { return '@' + (Number(n) || 0).toLocaleString('ja-JP'); }
     function fmtYenMark(n) { return '¥' + (Number(n) || 0).toLocaleString('ja-JP'); }
@@ -349,12 +768,16 @@
         ? d.languages.join('・') : '';
       let text;
       if (pageType === 'equipment') {
-        text = '同時通訳機器レンタル（' + (d.projectName ? esc(d.projectName) : '') + '）業務';
-      } else {
-        const langPart = langs ? '　' + langs + '　' : '　';
+        // 案件名がある場合のみ（）を付ける
         text = d.projectName
-          ? esc(d.projectName) + langPart + '同時通訳業務'
-          : '同時通訳業務';
+          ? '同時通訳機器レンタル（' + esc(d.projectName) + '）業務'
+          : '同時通訳機器レンタル業務';
+      } else {
+        const parts = [];
+        if (d.projectName) parts.push(esc(d.projectName));
+        if (langs) parts.push(langs);
+        parts.push('同時通訳業務');
+        text = parts.join('　');
       }
       const subLabel = pageType === 'equipment' ? '（機器レンタル費用など）' : '（通訳費用など）';
       return ''
@@ -399,7 +822,17 @@
 
       const mgmtBase = interpFeeTotal + overtimeFee;
       const mgmtFee  = Math.round(mgmtBase * 0.1);
-      const mgmtNum  = rowNum++;
+      // 通訳料がある場合のみ管理費を表示
+      let mgmtRow = '';
+      if (interpItems.length > 0) {
+        const mgmtNum = rowNum++;
+        mgmtRow = '<tr>'
+          + '<td class="td-name">' + mgmtNum + ')&ensp;管理費</td>'
+          + '<td class="td-price td-note">上記通訳料合計の10%</td>'
+          + '<td class="td-qty"></td>'
+          + '<td class="td-sub">' + fmtYen(mgmtFee) + '</td>'
+          + '</tr>';
+      }
 
       const travelUnit = 28000, dailyUnit = 8000;
       let travelFee = 0, dailyFee = 0;
@@ -443,7 +876,6 @@
             + '<td class="td-sub">' + fmtYen(dailyFee) + '</td>'
             + '</tr>';
         }
-
         const transportLabel = d.transportRoute
           ? '交通費（' + esc(d.transportRoute) + '）' : '交通費';
         const transN = rowNum++;
@@ -452,7 +884,6 @@
           + '<td class="td-jitsubi" colspan="2">実費で請求させていただきます</td>'
           + '<td class="td-sub" style="text-align:center; font-style:italic; color:#444;">実費</td>'
           + '</tr>';
-
         if (d.requiresStay) {
           const stayN = rowNum++;
           travelRows += '<tr>'
@@ -481,12 +912,7 @@
         + '<tbody>'
         + itemRows
         + overtimeRow
-        + '<tr>'
-        + '<td class="td-name">' + mgmtNum + ')&ensp;管理費</td>'
-        + '<td class="td-price td-note">上記通訳料合計の10%</td>'
-        + '<td class="td-qty"></td>'
-        + '<td class="td-sub">' + fmtYen(mgmtFee) + '</td>'
-        + '</tr>'
+        + mgmtRow
         + travelRows
         + '<tr class="empty-row"><td colspan="4">&nbsp;</td></tr>'
         + '<tr class="empty-row"><td colspan="4">&nbsp;</td></tr>'
@@ -499,7 +925,7 @@
         + '<div class="notes-block">'
         + (!isTaxExempt ? '<p class="star-note">＊は消費税額を含む金額であることを示します</p>' : '')
         + '<table class="notes-tbl">'
-        + '<tr><td>納入日</td><td>：</td><td>' + (d.eventDate ? esc(d.eventDate) : '「項目」欄を参照') + '</td></tr>'
+        + '<tr><td>納入日</td><td>：</td><td>' + (d.eventDate ? esc(addDayOfWeek(d.eventDate)) : '「項目」欄を参照') + '</td></tr>'
         + '<tr><td>納入場所</td><td>：</td><td>' + (d.location ? esc(d.location) : '「項目」欄を参照') + '</td></tr>'
         + '<tr><td>お支払</td><td>：</td><td>請求日より30日以内銀行振込</td></tr>'
         + '<tr>'
@@ -527,7 +953,7 @@
 
       const discountRow = discount > 0
         ? '<tr><td class="td-name">お値引き</td><td></td><td></td><td class="td-sub">▲' + fmtYen(discount) + '</td></tr>'
-        : '<tr><td class="td-name">4)</td><td></td><td></td><td></td></tr>';
+        : '';
 
       return '<div class="page">'
         + headerHTML()
@@ -542,8 +968,6 @@
         + '</tr></thead>'
         + '<tbody>'
         + '<tr><td class="td-name">1)&ensp;同時通訳機器レンタル費用など</td><td class="td-price td-center">明細参照</td><td class="td-qty">一式</td><td class="td-sub">' + fmtYen(equipTotal) + '</td></tr>'
-        + '<tr><td class="td-name">2)</td><td></td><td></td><td></td></tr>'
-        + '<tr><td class="td-name">3)</td><td></td><td></td><td></td></tr>'
         + discountRow
         + '<tr class="empty-row"><td colspan="4">&nbsp;</td></tr>'
         + '<tr class="empty-row"><td colspan="4">&nbsp;</td></tr>'
@@ -556,17 +980,19 @@
         + '<div class="notes-block">'
         + (!isTaxExempt ? '<p class="star-note">＊は消費税額を含む金額であることを示します</p>' : '')
         + '<table class="notes-tbl">'
-        + '<tr><td>納入日</td><td>：</td><td>' + (d.eventDate ? esc(d.eventDate) : '「同時通訳機器レンタル費用など明細」参照') + '</td></tr>'
+        + '<tr><td>納入日</td><td>：</td><td>' + (d.eventDate ? esc(addDayOfWeek(d.eventDate)) : '「同時通訳機器レンタル費用など明細」参照') + '</td></tr>'
         + '<tr><td>納入場所</td><td>：</td><td>' + (locStr ? esc(locStr) : '「同時通訳機器レンタル費用など明細」参照') + '</td></tr>'
         + '<tr><td>お支払</td><td>：</td><td>請求日より30日以内銀行振込</td></tr>'
         + '</table></div>'
         + '</div>';
     }
 
-    function buildEquipDetailPage() {
+    function buildEquipDetailPage(items, titleSuffix) {
+      items = items || equipItems;
+      const pageTitle = '同時通訳機器レンタル費用など明細' + (titleSuffix ? '（' + titleSuffix + '）' : '');
       let detailTotal = 0;
       let detailRows = '';
-      equipItems.forEach(function(it) {
+      items.forEach(function(it) {
         if (it.venueEquipment) {
           detailRows += '<tr>'
             + '<td class="td-name">' + esc(it.name) + '</td>'
@@ -587,8 +1013,15 @@
         }
       });
 
+      // 合計行：左端空欄（枠なし）＋「合計金額」(台数+日数 colspan=2)＋金額(単価+金額 colspan=2)
+      const totalRow = '<tr>'
+        + '<td style="border:none; background:#fff;"></td>'
+        + '<td colspan="2" style="border:1px solid #000; border-top:2px solid #000; border-left:1px solid #000; text-align:center; font-weight:bold; font-size:11pt; white-space:nowrap;">合　計　金　額</td>'
+        + '<td colspan="2" style="border:1px solid #000; border-top:2px solid #000; text-align:right; font-weight:bold; font-size:11pt;">' + fmtYen(detailTotal) + '</td>'
+        + '</tr>';
+
       return '<div class="page">'
-        + '<div class="detail-title-box">同時通訳機器レンタル費用など明細</div>'
+        + '<div class="detail-title-box">' + pageTitle + '</div>'
         + '<div class="addr-row">'
         + '<div class="customer-block">' + customer + '</div>'
         + '<div class="sender-block">'
@@ -598,7 +1031,7 @@
         + '</div>'
         + '<table class="info-tbl">'
         + '<tr><td class="info-label">件　　　名</td><td class="info-sep">：</td><td class="info-val">' + (d.projectName ? esc(d.projectName) : '') + '</td></tr>'
-        + '<tr><td class="info-label">納　入　日</td><td class="info-sep">：</td><td class="info-val">' + (d.eventDate ? esc(d.eventDate) : '') + '</td></tr>'
+        + '<tr><td class="info-label">納　入　日</td><td class="info-sep">：</td><td class="info-val">' + (d.eventDate ? esc(addDayOfWeek(d.eventDate)) : '') + '</td></tr>'
         + '<tr><td class="info-label">納入場所</td><td class="info-sep">：</td><td class="info-val">' + (locStr ? esc(locStr) : '') + '</td></tr>'
         + '<tr><td class="info-label">設　　　営</td><td class="info-sep">：</td><td class="info-val">前日</td></tr>'
         + '<tr><td class="info-label">撤　　　去</td><td class="info-sep">：</td><td class="info-val">終了後</td></tr>'
@@ -613,11 +1046,9 @@
         + '</tr></thead>'
         + '<tbody>'
         + detailRows
-        + '<tr>'
-        + '<td colspan="3" style="border:1px solid #000; border-top:2px solid #000; text-align:center; font-weight:bold; font-size:11pt; white-space:nowrap;">合　計　金　額</td>'
-        + '<td style="border:1px solid #000; border-top:2px solid #000;"></td>'
-        + '<td class="td-right" style="border:1px solid #000; border-top:2px solid #000; font-weight:bold; font-size:11pt;">' + fmtYen(detailTotal) + '</td>'
-        + '</tr>'
+        + '<tr class="empty-row"><td colspan="5">&nbsp;</td></tr>'
+        + '<tr class="empty-row"><td colspan="5">&nbsp;</td></tr>'
+        + totalRow
         + '</tbody></table>'
         + '<div class="notes-block">'
         + '<p>合計金額に消費税は含まれていません。</p>'
@@ -626,11 +1057,14 @@
         + '</div>';
     }
 
+    const equipDetailPages = (d.isSplitMode && d.studioItems && d.localItems)
+      ? buildEquipDetailPage(d.studioItems, 'スタジオ') + buildEquipDetailPage(d.localItems, '現地配信')
+      : buildEquipDetailPage();
     let bodyContent;
     if (d.type === 'both') {
-      bodyContent = buildInterpPage() + buildEquipSummaryPage() + buildEquipDetailPage();
+      bodyContent = buildInterpPage() + buildEquipSummaryPage() + equipDetailPages;
     } else if (d.type === 'equipment') {
-      bodyContent = buildEquipSummaryPage() + buildEquipDetailPage();
+      bodyContent = buildEquipSummaryPage() + equipDetailPages;
     } else {
       bodyContent = buildInterpPage();
     }
@@ -645,8 +1079,10 @@
       '.sender-block { text-align: right; line-height: 1.7; font-size: 9pt; }',
       '.main-title { text-align: center; font-size: 20pt; font-weight: bold; margin-top: 20px; margin-bottom: 4px; letter-spacing: 0.15em; }',
       '.sub-title { text-align: center; font-size: 10pt; margin-bottom: 10px; }',
-      '.detail-title-box { text-align: center; font-size: 14pt; font-weight: bold; border: 2px solid #000; padding: 7px 0; margin-bottom: 15px; letter-spacing: 0.05em; }',
-      '.info-tbl { border-collapse: collapse; width: 100%; margin: 0 0 15px; font-size: 10pt; }',
+      // 明細タイトル：文字サイズに合わせた幅・高さ
+      '.detail-title-box { display: table; width: auto; margin: 0 auto 15px; text-align: center; font-size: 16pt; font-weight: bold; border: 2px solid #000; padding: 3px 24px; letter-spacing: 0.05em; }',
+      // 情報テーブル：項目+台数+日数列幅（40+8+8=56%）に揃える
+      '.info-tbl { border-collapse: collapse; width: 56%; margin: 0 0 15px; font-size: 10pt; }',
       '.info-tbl td { border: 1px solid #000; padding: 4px 6px; text-align: left; }',
       '.info-label { font-weight: bold; white-space: nowrap; width: 90px; }',
       '.info-sep { text-align: left; white-space: nowrap; width: 16px; }',
@@ -662,6 +1098,7 @@
       '.th-sub { width: 20%; }',
       '.th-center { text-align: center; }',
       '.th-right { text-align: right; }',
+      // 明細テーブル列幅：項目40+台数8+日数8+単価20+金額24
       '.detail-tbl th:nth-child(1) { width: 40%; }',
       '.detail-tbl th:nth-child(2) { width: 8%; }',
       '.detail-tbl th:nth-child(3) { width: 8%; }',
@@ -717,6 +1154,56 @@
     } else {
       showError('ポップアップがブロックされました。ブラウザの設定を確認してください。');
     }
+  }
+
+  // ── ページ離脱時にメール本文・解析結果をメモリから消去 ──
+  window.addEventListener('beforeunload', () => {
+    emailTextEl.value = '';
+    quoteData = null;
   });
+
+  // ── PDF確認ボタン（別タブでプレビュー）─────────────────
+  if (pdfBtn) {
+    pdfBtn.addEventListener('click', () => buildAndPrintPDF(collectData()));
+  }
+
+  // ── まとめてダウンロードボタン ────────────────────────────
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', async () => {
+      const d     = collectData();
+      const fname = buildFileName(d);
+
+      try {
+        downloadBtn.disabled = true;
+        const res = await fetch('/api/quotes/export/excel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(d),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          showError('Excel生成に失敗しました: ' + (err.message || res.status));
+          return;
+        }
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = fname + '.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showError('通信エラーが発生しました: ' + err.message);
+        return;
+      } finally {
+        downloadBtn.disabled = false;
+      }
+
+      setTimeout(() => {
+        const msg = 'Excelをダウンロードしました。\n\n次にPDFを保存します。\n印刷ダイアログで「PDFに保存」を選択し、\nファイル名を以下にしてください:\n\n' + fname + '.pdf\n\n[OK] で印刷ダイアログを開きます。';
+        if (confirm(msg)) buildAndPrintPDF(d);
+      }, 400);
+    });
+  }
 
 })();
