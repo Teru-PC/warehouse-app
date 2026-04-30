@@ -19,35 +19,72 @@
     return VENUE_EQUIPMENT_PATTERNS.some(p => (name || '').includes(p));
   }
 
+  // ── 旧フォーマット「台/日」→ {qtyUnit,daysVal,daysUnitVal} に変換 ──
+  function parseUnitString(unit) {
+    const u = (unit || '').trim();
+    if (!u || u === '式' || u === '一式' || u === '時間') {
+      return { qtyUnit: u || '式', daysVal: 0, daysUnitVal: '' };
+    }
+    const slash = u.indexOf('/');
+    if (slash === -1) return { qtyUnit: u, daysVal: 0, daysUnitVal: '' };
+    return {
+      qtyUnit:    u.substring(0, slash).trim(),
+      daysVal:    1,
+      daysUnitVal: u.substring(slash + 1).trim(),
+    };
+  }
+
+  // ── AI返却データを新フォーマットに変換（numDaysを各品目に適用）──
+  function migrateItemUnits(items, numDays) {
+    const d = Math.max(1, Number(numDays) || 1);
+    return (items || []).map(it => {
+      if (!it || it.empty) return it;
+      if ('daysUnit' in it) return it;
+      const u = (it.unit || '').trim();
+      if (!u || u === '式' || u === '一式' || u === '時間') {
+        return Object.assign({}, it, { unit: u || '式', days: 0, daysUnit: '' });
+      }
+      const slash = u.indexOf('/');
+      if (slash === -1) return Object.assign({}, it, { unit: u, days: 0, daysUnit: '' });
+      const qtyUnit  = u.substring(0, slash).trim();
+      const timeUnit = u.substring(slash + 1).trim();
+      return Object.assign({}, it, {
+        unit:    qtyUnit,
+        days:    timeUnit === '日' ? d : 1,
+        daysUnit: timeUnit,
+      });
+    });
+  }
+
   // ── プリセットデータ ──────────────────────────────────────
   const PRESETS = {
     local: {
       name: '現地のみ',
       items: [
-        { name: '通訳ユニット',           quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
-        { name: '簡易卓上ブース',         quantity: 1, unit: '台/日', unitPrice: 0,     venueCheckable: true },
-        { name: 'FM無線送信機',           quantity: 2, unit: '台/日', unitPrice: 2000 },
-        { name: 'FM無線受信機',           quantity: 1, unit: '台/日', unitPrice: 1000 },
-        { name: '音響ミキサー（小）',     quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
-        { name: '無線マイク',             quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
-        { name: '有線マイク',             quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
-        { name: 'スピーカー・音響設備',   quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
-        { name: 'チーフエンジニア',       quantity: 1, unit: '名/日', unitPrice: 35000 },
-        { name: '機材運搬費',             quantity: 1, unit: '式',    unitPrice: 30000 },
-        { name: '設営・撤去費',           quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: '通訳ユニット',           quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 18000, venueCheckable: true },
+        { name: '簡易卓上ブース',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 0,     venueCheckable: true },
+        { name: 'FM無線送信機',           quantity: 2, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
+        { name: 'FM無線受信機',           quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 1000 },
+        { name: '音響ミキサー（小）',     quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
+        { name: '無線マイク',             quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true },
+        { name: '有線マイク',             quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true },
+        { name: 'スピーカー・音響設備',   quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true },
+        { name: 'チーフエンジニア',       quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
+        { name: '機材運搬費',             quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
+        { name: '設営・撤去費',           quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
         { empty: true }, { empty: true },
       ],
     },
     online: {
       name: 'オンライン',
       items: [
-        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
-        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
-        { name: 'オーディオインターフェイス', quantity: 3, unit: '台/日', unitPrice: 2000 },
-        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式',    unitPrice: 10000 },
-        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
-        { name: 'スタジオ使用料',             quantity: 1, unit: '時間',  unitPrice: 10000 },
-        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: '通訳ユニット',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 18000, venueCheckable: true },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 7000 },
+        { name: 'オーディオインターフェイス', quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
+        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 10000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
+        { name: 'スタジオ使用料',             quantity: 1, unit: '時間', days: 0, daysUnit: '', unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
         { empty: true }, { empty: true },
       ],
     },
@@ -55,22 +92,22 @@
       name: 'ブリッジ',
       split: true,
       studioItems: [
-        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
-        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
-        { name: 'オーディオインターフェイス', quantity: 3, unit: '台/日', unitPrice: 2000 },
-        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式',    unitPrice: 10000 },
-        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
-        { name: 'スタジオ使用料',             quantity: 1, unit: '時間',  unitPrice: 10000 },
-        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: '通訳ユニット',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 18000, venueCheckable: true },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 7000 },
+        { name: 'オーディオインターフェイス', quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
+        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 10000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
+        { name: 'スタジオ使用料',             quantity: 1, unit: '時間', days: 0, daysUnit: '', unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
       ],
       localItems: [
-        { name: 'オンライン接続用PC',         quantity: 2, unit: '台/日', unitPrice: 7000 },
-        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
-        { name: 'FM無線送信機',               quantity: 2, unit: '台/日', unitPrice: 2000 },
-        { name: 'FM無線受信機',               quantity: 1, unit: '台/日', unitPrice: 1000 },
-        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
-        { name: '機材運搬費',                 quantity: 1, unit: '式',    unitPrice: 30000 },
-        { name: '設営・撤去費',               quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: 'オンライン接続用PC',         quantity: 2, unit: '台', days: 1, daysUnit: '日', unitPrice: 7000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
+        { name: 'FM無線送信機',               quantity: 2, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
+        { name: 'FM無線受信機',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 1000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
+        { name: '機材運搬費',                 quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
+        { name: '設営・撤去費',               quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
         { empty: true }, { empty: true },
       ],
     },
@@ -78,52 +115,52 @@
       name: '現地配信あり',
       split: true,
       studioItems: [
-        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
-        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
-        { name: 'オーディオインターフェイス', quantity: 3, unit: '台/日', unitPrice: 2000 },
-        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式',    unitPrice: 10000 },
-        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
-        { name: 'スタジオ使用料',             quantity: 1, unit: '時間',  unitPrice: 10000 },
-        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
+        { name: '通訳ユニット',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 18000, venueCheckable: true },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 7000 },
+        { name: 'オーディオインターフェイス', quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
+        { name: 'モニターセット（通訳者用）', quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 10000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
+        { name: 'スタジオ使用料',             quantity: 1, unit: '時間', days: 0, daysUnit: '', unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
       ],
       localItems: [
-        { name: 'オンライン接続用PC',         quantity: 3, unit: '台/日', unitPrice: 7000 },
-        { name: '音響ミキサー（小）',         quantity: 1, unit: '台/日', unitPrice: 15000, venueCheckable: true },
-        { name: 'FM無線送信機',               quantity: 2, unit: '台/日', unitPrice: 2000 },
-        { name: 'FM無線受信機',               quantity: 1, unit: '台/日', unitPrice: 1000 },
-        { name: 'ビデオカメラ',               quantity: 2, unit: '台/日', unitPrice: 25000 },
-        { name: '映像スイッチャー',           quantity: 1, unit: '台/日', unitPrice: 25000 },
-        { name: 'カメラ備品',                 quantity: 1, unit: '式',    unitPrice: 5000 },
-        { name: 'モニター（カメラ用）',       quantity: 1, unit: '台/日', unitPrice: 10000 },
-        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
-        { name: 'アシスタントエンジニア',     quantity: 1, unit: '名/日', unitPrice: 30000 },
-        { name: '機材運搬費',                 quantity: 1, unit: '式',    unitPrice: 30000 },
-        { name: '設営・撤去費',               quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: 'オンライン接続用PC',         quantity: 3, unit: '台', days: 1, daysUnit: '日', unitPrice: 7000 },
+        { name: '音響ミキサー（小）',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
+        { name: 'FM無線送信機',               quantity: 2, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
+        { name: 'FM無線受信機',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 1000 },
+        { name: 'ビデオカメラ',               quantity: 2, unit: '台', days: 1, daysUnit: '日', unitPrice: 25000 },
+        { name: '映像スイッチャー',           quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 25000 },
+        { name: 'カメラ備品',                 quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 5000 },
+        { name: 'モニター（カメラ用）',       quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 10000 },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
+        { name: 'アシスタントエンジニア',     quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 30000 },
+        { name: '機材運搬費',                 quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
+        { name: '設営・撤去費',               quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
         { empty: true }, { empty: true },
       ],
     },
     ram: {
       name: 'ラムに依頼',
       items: [
-        { name: '通訳ユニット',               quantity: 1, unit: '台/日', unitPrice: 18000, venueCheckable: true },
-        { name: '同時通訳ブース',             quantity: 1, unit: '台/日', unitPrice: 0,     venueCheckable: true },
-        { name: '赤外線送信機＋ラジエター',   quantity: 1, unit: '式',    unitPrice: 0 },
-        { name: '赤外線受信機',               quantity: 1, unit: '台/日', unitPrice: 0 },
-        { name: '音響ミキサー（大）',         quantity: 1, unit: '台/日', unitPrice: 0,     venueCheckable: true },
-        { name: '無線マイク',                 quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
-        { name: '有線マイク',                 quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
-        { name: 'スピーカー・音響設備',       quantity: 1, unit: '式',    unitPrice: 0,     venueEquipment: true },
-        { name: 'チーフエンジニア',           quantity: 1, unit: '名/日', unitPrice: 35000 },
-        { name: 'アシスタントエンジニア',     quantity: 1, unit: '名/日', unitPrice: 30000 },
-        { name: '機材運搬費',                 quantity: 1, unit: '式',    unitPrice: 30000 },
-        { name: '設営・撤去費',               quantity: 1, unit: '式',    unitPrice: 30000 },
+        { name: '通訳ユニット',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 18000, venueCheckable: true },
+        { name: '同時通訳ブース',             quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 0,     venueCheckable: true },
+        { name: '赤外線送信機＋ラジエター',   quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0 },
+        { name: '赤外線受信機',               quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 0 },
+        { name: '音響ミキサー（大）',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 0,     venueCheckable: true },
+        { name: '無線マイク',                 quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true },
+        { name: '有線マイク',                 quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true },
+        { name: 'スピーカー・音響設備',       quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true },
+        { name: 'チーフエンジニア',           quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 35000 },
+        { name: 'アシスタントエンジニア',     quantity: 1, unit: '名', days: 1, daysUnit: '日', unitPrice: 30000 },
+        { name: '機材運搬費',                 quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
+        { name: '設営・撤去費',               quantity: 1, unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 },
         { empty: true }, { empty: true },
       ],
     },
   };
 
   // ── 通訳品目：旅費系はPDFで自動生成のため除外 ────────────
-  const TRAVEL_ITEM_NAMES = ['移動拘束費', '日当', '交通費', '宿泊費', '旅費'];
+  const TRAVEL_ITEM_NAMES = ['移動拘束費', '日当', '交通費', '宿泊費', '旅費', '延長料'];
   function filterInterpItems(items) {
     return (items || []).filter(it => !TRAVEL_ITEM_NAMES.some(n => it.name.includes(n)));
   }
@@ -139,7 +176,8 @@
       if (/半日/.test(name)) price = halfDayPrice;
       else if (/1日|一日/.test(name)) price = fullDayPrice;
       const qty = Number(it.quantity) || 0;
-      const sub = it.venueEquipment ? 0 : qty * price;
+      const d   = Number(it.days) > 0 ? Number(it.days) : 1;
+      const sub = it.venueEquipment ? 0 : qty * d * price;
       return Object.assign({}, it, { unitPrice: price, subtotal: sub });
     });
   }
@@ -234,6 +272,8 @@
   const fProject      = document.getElementById('fProject');
   const fDate         = document.getElementById('fDate');
   const fLocation     = document.getElementById('fLocation');
+  const fSetup        = document.getElementById('fSetup');
+  const fTeardown     = document.getElementById('fTeardown');
 
   const interpCard    = document.getElementById('interpCard');
   const interpBody    = document.getElementById('interpBody');
@@ -276,8 +316,9 @@
   function fmt(n) {
     return '¥' + (Number(n) || 0).toLocaleString('ja-JP');
   }
-  function calcSubtotal(qty, price) {
-    return (Number(qty) || 0) * (Number(price) || 0);
+  function calcSubtotal(qty, price, days) {
+    const d = Number(days);
+    return (Number(qty) || 0) * (d > 0 ? d : 1) * (Number(price) || 0);
   }
   function esc(str) {
     return String(str || '')
@@ -387,52 +428,83 @@
 
   // ── 品目行を追加 ──────────────────────────────────────────
   function addItemRow(tbody, item, isEquip, insertBefore) {
-    item = item || { name: '', quantity: 1, unit: '式', unitPrice: 0 };
-    const isVenue = isEquip && Boolean(item.venueEquipment);
-    // 会場常設チェックを表示するか（明示フラグ または 名前パターン）
+    item = item || { name: '', quantity: 1, unit: '式', days: 0, daysUnit: '', unitPrice: 0 };
+
+    // 単位フィールドを分解（旧フォーマット「台/日」→新フォーマット）
+    let qtyUnit, daysVal, daysUnitVal;
+    if ('daysUnit' in item) {
+      qtyUnit    = item.unit     || '式';
+      daysVal    = item.days    != null ? item.days    : 0;
+      daysUnitVal = item.daysUnit != null ? item.daysUnit : '';
+    } else {
+      const p    = parseUnitString(item.unit || '式');
+      qtyUnit    = p.qtyUnit;
+      daysVal    = p.daysVal;
+      daysUnitVal = p.daysUnitVal;
+    }
+
+    const isVenue        = isEquip && Boolean(item.venueEquipment);
     const showVenueCheck = isEquip && (Boolean(item.venueEquipment) || Boolean(item.venueCheckable));
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="td-drag"><span class="drag-handle" draggable="true" title="ドラッグして並び替え">⠿</span></td>
       <td class="td-name"><input type="text" class="name-input" value="${esc(item.name)}" placeholder="品名" list="itemNameList" /></td>
       <td>
-        ${showVenueCheck ? `<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap;">
-          <input type="checkbox" class="venue-check" ${isVenue ? 'checked' : ''}>常設
-        </label>` : ''}
-        <input type="number" class="qty-input" value="${Number(item.quantity) || 1}" min="0" style="width:60px;${isVenue ? 'display:none;' : ''}" />
+        ${showVenueCheck ? `<label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;white-space:nowrap;"><input type="checkbox" class="venue-check" ${isVenue ? 'checked' : ''}>常設</label>` : ''}
+        <div class="qty-cell" style="display:${isVenue ? 'none' : 'flex'};align-items:center;gap:2px;">
+          <input type="number" class="qty-input" value="${Number(item.quantity) || 1}" min="0" style="width:44px;" />
+          <input type="text" class="unit-input" value="${esc(qtyUnit)}" style="width:28px;text-align:center;" />
+        </div>
       </td>
-      <td><input type="text" class="unit-input" value="${esc(item.unit || '式')}" style="width:50px;" /></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <input type="number" class="days-input" value="${daysVal > 0 ? daysVal : ''}" min="0" step="0.5" style="width:34px;" placeholder="" />
+          <input type="text" class="days-unit-input" value="${esc(daysUnitVal)}" style="width:26px;text-align:center;" />
+        </div>
+      </td>
       <td><input type="number" class="price-input" value="${Number(item.unitPrice) || 0}" min="0" step="100" /></td>
-      <td class="td-sub">${isVenue ? fmt(0) : fmt(calcSubtotal(item.quantity, item.unitPrice))}</td>
+      <td class="td-sub">${isVenue ? fmt(0) : fmt(calcSubtotal(item.quantity, item.unitPrice, daysVal))}</td>
       <td class="td-del"><button class="del-btn" type="button" title="削除">×</button></td>
     `;
-    const nameIn  = tr.querySelector('.name-input');
-    const unitIn  = tr.querySelector('.unit-input');
-    const qtyIn   = tr.querySelector('.qty-input');
-    const priceIn = tr.querySelector('.price-input');
+    const nameIn     = tr.querySelector('.name-input');
+    const unitIn     = tr.querySelector('.unit-input');
+    const qtyIn      = tr.querySelector('.qty-input');
+    const daysIn     = tr.querySelector('.days-input');
+    const daysUnitIn = tr.querySelector('.days-unit-input');
+    const priceIn    = tr.querySelector('.price-input');
     function updateSub() {
       const venueChk = tr.querySelector('.venue-check');
       if (venueChk && venueChk.checked) {
         tr.querySelector('.td-sub').textContent = fmt(0);
       } else {
-        tr.querySelector('.td-sub').textContent = fmt(calcSubtotal(qtyIn.value, priceIn.value));
+        const days = daysIn ? Number(daysIn.value) || 0 : 0;
+        tr.querySelector('.td-sub').textContent = fmt(calcSubtotal(qtyIn.value, priceIn.value, days));
       }
       recalcTotal();
     }
     if (showVenueCheck) {
       const venueChk = tr.querySelector('.venue-check');
       venueChk.addEventListener('change', () => {
-        qtyIn.style.display = venueChk.checked ? 'none' : '';
+        const qtyCell = tr.querySelector('.qty-cell');
+        if (qtyCell) qtyCell.style.display = venueChk.checked ? 'none' : 'flex';
         updateSub();
       });
     }
     qtyIn.addEventListener('input', updateSub);
+    daysIn.addEventListener('input', updateSub);
     priceIn.addEventListener('input', updateSub);
     nameIn.addEventListener('change', () => {
       if (!priceMasterData) return;
       const allMaster = [...(priceMasterData.interpretation || []), ...(priceMasterData.equipment || [])];
       const match = allMaster.find(m => m.name === nameIn.value);
-      if (match) { priceIn.value = match.unitPrice; unitIn.value = match.unit; updateSub(); }
+      if (match) {
+        priceIn.value = match.unitPrice;
+        const parsed = parseUnitString(match.unit || '式');
+        unitIn.value     = parsed.qtyUnit;
+        daysIn.value     = parsed.daysVal > 0 ? parsed.daysVal : '';
+        daysUnitIn.value = parsed.daysUnitVal;
+        updateSub();
+      }
     });
     tr.querySelector('.del-btn').addEventListener('click', () => { tr.remove(); recalcTotal(); });
     if (insertBefore) tbody.insertBefore(tr, insertBefore);
@@ -470,19 +542,20 @@
       // 言語数が3以上の場合のみ通訳ユニットを言語数分に増やす（2言語以下は常に1台）
       const langCount = Math.max(1, Number(opts.languageCount) || 1);
       const unitQty   = langCount >= 3 ? langCount : 1;
+      const eventDays = Math.max(1, Number(opts.eventDays) || 1);
       // 正規化済みAI品目をスロットにマッピングして決まった順で描画
       const slots = [
-        { kw: 'ブース',           def: { name: '簡易卓上ブース',       quantity: 1,       unit: '台/日', unitPrice: 0,     venueCheckable: true } },
-        { kw: '通訳ユニット',     def: { name: '通訳ユニット',         quantity: unitQty, unit: '台/日', unitPrice: 18000, venueCheckable: true } },
-        { kw: 'FM無線送信機',     def: { name: 'FM無線送信機',         quantity: 2,       unit: '台/日', unitPrice: 2000 } },
-        { kw: 'FM無線受信機',     def: { name: 'FM無線受信機',         quantity: 1,       unit: '台/日', unitPrice: 1000 } },
-        { kw: '音響ミキサー',     def: { name: '音響ミキサー（小）',   quantity: 1,       unit: '台/日', unitPrice: 15000, venueCheckable: true } },
-        { kw: '無線マイク',       def: { name: '無線マイク',           quantity: 1,       unit: '式',    unitPrice: 0,     venueEquipment: true } },
-        { kw: '有線マイク',       def: { name: '有線マイク',           quantity: 1,       unit: '式',    unitPrice: 0,     venueEquipment: true } },
-        { kw: 'スピーカー',       def: { name: 'スピーカー・音響設備', quantity: 1,       unit: '式',    unitPrice: 0,     venueEquipment: true } },
-        { kw: 'チーフエンジニア', def: { name: 'チーフエンジニア',     quantity: 1,       unit: '名/日', unitPrice: 35000 } },
-        { kw: '機材運搬費',       def: { name: '機材運搬費',           quantity: 1,       unit: '式',    unitPrice: 30000 } },
-        { kw: '設営',             def: { name: '設営・撤去費',         quantity: 1,       unit: '式/回', unitPrice: 30000 } },
+        { kw: 'ブース',           def: { name: '簡易卓上ブース',       quantity: 1,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 0,     venueCheckable: true } },
+        { kw: '通訳ユニット',     def: { name: '通訳ユニット',         quantity: unitQty, unit: '台', days: eventDays, daysUnit: '日', unitPrice: 18000, venueCheckable: true } },
+        { kw: 'FM無線送信機',     def: { name: 'FM無線送信機',         quantity: 2,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 2000 } },
+        { kw: 'FM無線受信機',     def: { name: 'FM無線受信機',         quantity: 1,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 1000 } },
+        { kw: '音響ミキサー',     def: { name: '音響ミキサー（小）',   quantity: 1,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 15000, venueCheckable: true } },
+        { kw: '無線マイク',       def: { name: '無線マイク',           quantity: 1,       unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true } },
+        { kw: '有線マイク',       def: { name: '有線マイク',           quantity: 1,       unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true } },
+        { kw: 'スピーカー',       def: { name: 'スピーカー・音響設備', quantity: 1,       unit: '式', days: 0, daysUnit: '',   unitPrice: 0,     venueEquipment: true } },
+        { kw: 'チーフエンジニア', def: { name: 'チーフエンジニア',     quantity: 1,       unit: '名', days: eventDays, daysUnit: '日', unitPrice: 35000 } },
+        { kw: '機材運搬費',       def: { name: '機材運搬費',           quantity: 1,       unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 } },
+        { kw: '設営',             def: { name: '設営・撤去費',         quantity: 1,       unit: '式', days: 0, daysUnit: '',   unitPrice: 30000 } },
       ];
       // ヘッドフォンアンプはデフォルト表示から除外（手動追加のみ）
       const aiItems  = (items || []).filter(it => !it.empty && !(it.name || '').includes('ヘッドフォンアンプ'));
@@ -515,8 +588,10 @@
         }
         const qtyIn   = tr.querySelector('.qty-input');
         const priceIn = tr.querySelector('.price-input');
+        const daysIn  = tr.querySelector('.days-input');
         if (!qtyIn || !priceIn) return;
-        const sub = calcSubtotal(qtyIn.value, priceIn.value);
+        const days = daysIn ? Number(daysIn.value) || 0 : 0;
+        const sub = calcSubtotal(qtyIn.value, priceIn.value, days);
         tr.querySelector('.td-sub').textContent = fmt(sub);
         interpSum += sub;
       });
@@ -537,8 +612,10 @@
           }
           const qtyIn   = tr.querySelector('.qty-input');
           const priceIn = tr.querySelector('.price-input');
+          const daysIn  = tr.querySelector('.days-input');
           if (!qtyIn || !priceIn) return;
-          const sub = calcSubtotal(qtyIn.value, priceIn.value);
+          const days = daysIn ? Number(daysIn.value) || 0 : 0;
+          const sub = calcSubtotal(qtyIn.value, priceIn.value, days);
           tr.querySelector('.td-sub').textContent = fmt(sub);
           total += sub;
         });
@@ -552,19 +629,24 @@
   function collectTableItems(tbody) {
     const items = [];
     tbody.querySelectorAll('tr').forEach(tr => {
-      const nameIn  = tr.querySelector('.name-input');
-      const qtyIn   = tr.querySelector('.qty-input');
-      const unitIn  = tr.querySelector('.unit-input');
-      const priceIn = tr.querySelector('.price-input');
+      const nameIn     = tr.querySelector('.name-input');
+      const qtyIn      = tr.querySelector('.qty-input');
+      const unitIn     = tr.querySelector('.unit-input');
+      const daysIn     = tr.querySelector('.days-input');
+      const daysUnitIn = tr.querySelector('.days-unit-input');
+      const priceIn    = tr.querySelector('.price-input');
       if (!nameIn || !priceIn) return;
       const venueChk = tr.querySelector('.venue-check');
       const isVenue  = venueChk ? venueChk.checked : false;
+      const daysNum  = daysIn ? (Number(daysIn.value) || 0) : 0;
       items.push({
         name:           nameIn.value,
         quantity:       isVenue ? 0 : (Number(qtyIn ? qtyIn.value : 1) || 0),
         unit:           unitIn ? unitIn.value : '式',
+        days:           isVenue ? 0 : daysNum,
+        daysUnit:       daysUnitIn ? daysUnitIn.value : '',
         unitPrice:      isVenue ? 0 : (Number(priceIn.value) || 0),
-        subtotal:       isVenue ? 0 : calcSubtotal(qtyIn ? qtyIn.value : 1, priceIn.value),
+        subtotal:       isVenue ? 0 : calcSubtotal(qtyIn ? qtyIn.value : 1, priceIn.value, daysNum),
         venueEquipment: isVenue,
       });
     });
@@ -590,6 +672,8 @@
       projectName:        fProject.value,
       eventDate:          fDate.value,
       location:           fLocation ? fLocation.value : ((quoteData && quoteData.location) || ''),
+      setup:              fSetup    ? fSetup.value    : '当日',
+      teardown:           fTeardown ? fTeardown.value : '終了後',
       interpretationItems,
       equipmentItems,
       studioItems,
@@ -643,19 +727,54 @@
       fDate.value = addDayOfWeek((data.eventDate || '') + timeStr);
       if (fLocation) fLocation.value = data.location || '';
 
-      // 通訳品目：旅費系除外 → 言語別単価設定 → 管理費行追加
+      const eventDays = Math.max(1, Number(data.numDays) || 1);
+
+      // 通訳品目：旅費系除外 → 言語別単価設定 → 単位マイグレーション → 管理費行追加
       const filteredInterp = filterInterpItems(data.interpretationItems);
       const pricedInterp   = applyInterpPricing(filteredInterp, data.languages);
-      renderTable(interpBody, pricedInterp, false);
+      const migratedInterp = migrateItemUnits(pricedInterp, eventDays);
+      renderTable(interpBody, migratedInterp, false);
+
+      // 8時間超の場合は通訳料行の直後に延長料金行を追加
+      // interpretationItemsに延長料金がない場合はworkingHoursから自動生成（フォールバック）
+      const hasOvertimeInItems = (data.interpretationItems || []).some(function(it) { return /延長/.test(it.name || ''); });
+      const wh = Number(data.workingHours) || 0;
+      const overtimeByType = data.interpretationType === 'fullDayWithOvertime' && Number(data.overtimeUnits) > 0;
+      const overtimeByHours = wh > 8;
+      console.log('[quotes] overtime check:', { hasOvertimeInItems, wh, overtimeByType, overtimeByHours, interpretationType: data.interpretationType, overtimeUnits: data.overtimeUnits });
+      if (!hasOvertimeInItems && (overtimeByType || overtimeByHours)) {
+        const extraUnits = Number(data.overtimeUnits) > 0
+          ? Number(data.overtimeUnits)
+          : Math.ceil((wh - 8) * 2);
+        const interps = Math.max(1, Number(data.interpreters) || 1);
+        // 通訳料の行を探して直後に挿入
+        let interpFeeRow = null;
+        interpBody.querySelectorAll('tr').forEach(function(tr) {
+          const nameIn = tr.querySelector('.name-input');
+          if (nameIn && /通訳料/.test(nameIn.value)) interpFeeRow = tr;
+        });
+        const insertBefore = interpFeeRow ? interpFeeRow.nextSibling : null;
+        console.log('[quotes] adding overtime row:', { extraUnits, interps, insertBefore: !!insertBefore });
+        addItemRow(interpBody, {
+          name:      '延長料金',
+          quantity:  extraUnits,  // コマ数（30分単位）
+          unit:      'コマ',
+          days:      interps,     // 名数
+          daysUnit:  '名',
+          unitPrice: 7000,
+        }, false, insertBefore || undefined);
+      }
+
       addMgmtFeeRow(interpBody);
 
-      // 機材品目：正規化 → venueフラグ付与 → 重複除去 → 描画（AI生成時は常に通常モード）
+      // 機材品目：正規化 → venueフラグ付与 → 重複除去 → 単位マイグレーション → 描画
       setEquipMode(false);
       const normalizedEquip = normalizeEquipItems(data.equipmentItems || []);
       const markedEquip     = markVenueCheckable(normalizedEquip);
       const dedupedEquip    = deduplicateEquipItems(markedEquip);
+      const migratedEquip   = migrateItemUnits(dedupedEquip, eventDays);
       const langCount       = data.languageCount || (data.languages ? data.languages.length : 1);
-      renderTable(equipBody, dedupedEquip, true, { addDefaults: true, languageCount: langCount });
+      renderTable(equipBody, migratedEquip, true, { addDefaults: true, languageCount: langCount, eventDays: eventDays });
 
       updateCardVisibility();
       previewArea.style.display = 'block';
@@ -730,19 +849,30 @@
     function fmtNum(n)     { return (Number(n) || 0).toLocaleString('ja-JP'); }
 
     function fmtQty(it) {
-      const unit = (it.unit || '').trim();
-      const qty  = Number(it.quantity) || 1;
+      const unit     = (it.unit     || '').trim();
+      const daysUnit = (it.daysUnit || '').trim();
+      const qty      = Number(it.quantity) || 1;
+      const days     = Number(it.days) || 0;
+
+      // 旧フォーマット（「台/日」のように「/」を含む）後方互換
+      if (unit.includes('/')) {
+        const slash     = unit.indexOf('/');
+        const leftUnit  = unit.substring(0, slash).trim();
+        const rightUnit = unit.substring(slash + 1).trim();
+        if (rightUnit === '半日') return qty + leftUnit + '×半日';
+        if (rightUnit === '日')   return qty + leftUnit + '×' + (days || numDays) + '日';
+        if (rightUnit === '時間') return qty + leftUnit + '×' + (days || 1) + '時間';
+        if (rightUnit === '回')   return qty + leftUnit + '×' + (days || 1) + '回';
+        return qty + esc(unit);
+      }
+
       if (unit === '式' || unit === '一式') return '一式';
-      const slash = unit.indexOf('/');
-      if (slash === -1) return qty + esc(unit);
-      const leftUnit  = unit.substring(0, slash).trim();
-      const rightUnit = unit.substring(slash + 1).trim();
-      const count     = leftUnit === '名' ? interpreters : qty;
-      if (rightUnit === '半日') return count + leftUnit + '×半日';
-      if (rightUnit === '日')   return count + leftUnit + '×' + numDays + '日';
-      if (rightUnit === '時間') return count + leftUnit + '×' + qty + '時間';
-      if (rightUnit === '回')   return qty + leftUnit + '×' + qty + '回';
-      return qty + esc(unit);
+      if (!daysUnit) return qty + esc(unit);
+      if (daysUnit === '半日') return qty + unit + '×半日';
+      if (daysUnit === '日')   return qty + unit + '×' + (days || 1) + '日';
+      if (daysUnit === '時間') return qty + unit + '×' + (days || 1) + '時間';
+      if (daysUnit === '回')   return qty + unit + '×' + (days || 1) + '回';
+      return qty + esc(unit) + (days ? '×' + days + esc(daysUnit) : '');
     }
 
     const customer = d.customerName
@@ -803,19 +933,20 @@
 
       const interpFeeTotal = interpItems.reduce(function(s, it) { return s + it.subtotal; }, 0);
 
-      const overtimeUnit = 7000;
-      let overtimeFee = 0;
+      // 延長料はUIテーブルに含まれている場合はinterpFeeTotalに含まれるため自動計算不要
+      // テーブルに延長料がない場合（旧データ等）のみフォールバックとして自動計算
+      const hasOvertimeItem = interpItems.some(function(it) { return /延長/.test(it.name || ''); });
       let overtimeRow = '';
-      if (workingHours > 8) {
+      let overtimeFee = 0;
+      if (!hasOvertimeItem && workingHours > 8) {
         const extraHours   = workingHours - 8;
         const extra05Units = Math.ceil(extraHours / 0.5);
-        const extraHrsVal  = extra05Units * 0.5;
-        overtimeFee = overtimeUnit * interpreters * extra05Units;
+        overtimeFee = 7000 * interpreters * extra05Units;
         const overN = rowNum++;
         overtimeRow = '<tr>'
           + '<td class="td-name">' + overN + ')&ensp;延長料</td>'
-          + '<td class="td-price">' + fmtAt(overtimeUnit) + '</td>'
-          + '<td class="td-qty">' + interpreters + '名×' + extraHrsVal + '時間</td>'
+          + '<td class="td-price">' + fmtAt(7000) + '</td>'
+          + '<td class="td-qty">' + interpreters + '名×' + extra05Units + 'コマ</td>'
           + '<td class="td-sub">' + fmtYen(overtimeFee) + '</td>'
           + '</tr>';
       }
@@ -945,7 +1076,9 @@
 
     function buildEquipSummaryPage() {
       const equipTotal = equipItems.reduce(function(s, it) {
-        return s + Math.max(1, Number(it.quantity) || 1) * numDays * (Number(it.unitPrice) || 0);
+        const qty  = Math.max(1, Number(it.quantity) || 1);
+        const days = Number(it.days) > 0 ? Number(it.days) : 1;
+        return s + qty * days * (Number(it.unitPrice) || 0);
       }, 0);
       const discountedTotal = Math.max(0, equipTotal - discount);
       const tax   = isTaxExempt ? 0 : Math.round(discountedTotal * 0.1);
@@ -1001,12 +1134,13 @@
             + '</tr>';
         } else {
           const qty    = Math.max(1, Number(it.quantity) || 1);
-          const amount = qty * numDays * (Number(it.unitPrice) || 0);
+          const days   = Number(it.days) > 0 ? Number(it.days) : 1;
+          const amount = qty * days * (Number(it.unitPrice) || 0);
           detailTotal += amount;
           detailRows += '<tr>'
             + '<td class="td-name">' + esc(it.name) + '</td>'
             + '<td class="td-center">' + qty + '</td>'
-            + '<td class="td-center">' + numDays + '</td>'
+            + '<td class="td-center">' + days + '</td>'
             + '<td class="td-right">' + fmtYenMark(it.unitPrice) + '</td>'
             + '<td class="td-right">' + fmtNum(amount) + '</td>'
             + '</tr>';
@@ -1033,8 +1167,8 @@
         + '<tr><td class="info-label">件　　　名</td><td class="info-sep">：</td><td class="info-val">' + (d.projectName ? esc(d.projectName) : '') + '</td></tr>'
         + '<tr><td class="info-label">納　入　日</td><td class="info-sep">：</td><td class="info-val">' + (d.eventDate ? esc(addDayOfWeek(d.eventDate)) : '') + '</td></tr>'
         + '<tr><td class="info-label">納入場所</td><td class="info-sep">：</td><td class="info-val">' + (locStr ? esc(locStr) : '') + '</td></tr>'
-        + '<tr><td class="info-label">設　　　営</td><td class="info-sep">：</td><td class="info-val">前日</td></tr>'
-        + '<tr><td class="info-label">撤　　　去</td><td class="info-sep">：</td><td class="info-val">終了後</td></tr>'
+        + '<tr><td class="info-label">設　　　営</td><td class="info-sep">：</td><td class="info-val">' + esc(d.setup || '当日') + '</td></tr>'
+        + '<tr><td class="info-label">撤　　　去</td><td class="info-sep">：</td><td class="info-val">' + esc(d.teardown || '終了後') + '</td></tr>'
         + '</table>'
         + '<table class="items-tbl detail-tbl">'
         + '<thead><tr>'

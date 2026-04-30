@@ -259,6 +259,22 @@
             <input type="text" id="fLocation" placeholder="東京国際フォーラム" autocomplete="off" />
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>設営</label>
+            <select id="fSetup">
+              <option value="当日">当日</option>
+              <option value="前日">前日</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>撤去</label>
+            <select id="fTeardown">
+              <option value="終了後">終了後</option>
+              <option value="翌日">翌日</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <!-- 通訳品目 -->
@@ -269,11 +285,11 @@
             <thead>
               <tr>
                 <th class="td-drag"></th>
-                <th style="width:38%;">品名</th>
-                <th style="width:11%; text-align:right;">数量</th>
-                <th style="width:10%;">単位</th>
+                <th style="width:32%;">品名</th>
+                <th style="width:15%; text-align:right;">数量</th>
+                <th style="width:13%;">日数</th>
                 <th style="width:17%; text-align:right;">単価（円）</th>
-                <th style="width:13%; text-align:right;">小計（円）</th>
+                <th style="width:12%; text-align:right;">小計（円）</th>
                 <th></th>
               </tr>
             </thead>
