@@ -62,7 +62,7 @@
       name: '現地のみ',
       items: [
         { name: '通訳ユニット',           quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 18000, venueCheckable: true },
-        { name: '簡易卓上ブース',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 0,     venueCheckable: true },
+        { name: '簡易卓上ブース',         quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 30000, venueCheckable: true },
         { name: 'FM無線送信機',           quantity: 2, unit: '台', days: 1, daysUnit: '日', unitPrice: 2000 },
         { name: 'FM無線受信機',           quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 1000 },
         { name: '音響ミキサー（小）',     quantity: 1, unit: '台', days: 1, daysUnit: '日', unitPrice: 15000, venueCheckable: true },
@@ -545,7 +545,7 @@
       const eventDays = Math.max(1, Number(opts.eventDays) || 1);
       // 正規化済みAI品目をスロットにマッピングして決まった順で描画
       const slots = [
-        { kw: 'ブース',           def: { name: '簡易卓上ブース',       quantity: 1,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 0,     venueCheckable: true } },
+        { kw: 'ブース',           def: { name: '簡易卓上ブース',       quantity: 1,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 30000, venueCheckable: true } },
         { kw: '通訳ユニット',     def: { name: '通訳ユニット',         quantity: unitQty, unit: '台', days: eventDays, daysUnit: '日', unitPrice: 18000, venueCheckable: true } },
         { kw: 'FM無線送信機',     def: { name: 'FM無線送信機',         quantity: 2,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 2000 } },
         { kw: 'FM無線受信機',     def: { name: 'FM無線受信機',         quantity: 1,       unit: '台', days: eventDays, daysUnit: '日', unitPrice: 1000 } },
@@ -716,6 +716,10 @@
       const data = await res.json();
       if (!res.ok) { showError(data.message || '解析に失敗しました。'); return; }
 
+      console.log('[quotes] API response type:', data.type);
+      console.log('[quotes] interpretationItems:', JSON.stringify(data.interpretationItems));
+      console.log('[quotes] equipmentItems names:', (data.equipmentItems || []).map(i => i.name));
+
       quoteData = data;
 
       fType.value     = data.type         || 'both';
@@ -885,6 +889,7 @@
         + '<div class="addr-row">'
         + '  <div class="customer-block">' + customer + '</div>'
         + '  <div class="sender-block">'
+        + '    <img src="/images/logo.png" style="height:44px; display:block; margin-bottom:6px;" />'
         + '    〒150-0047　東京都渋谷区神山町 5-5<br>'
         + '    株式会社 NHKグローバルメディアサービス<br>'
         + '    国際事業センター<br>'
@@ -1159,6 +1164,7 @@
         + '<div class="addr-row">'
         + '<div class="customer-block">' + customer + '</div>'
         + '<div class="sender-block">'
+        + '<img src="/images/logo.png" style="height:44px; display:block; margin-bottom:6px;" />'
         + '〒150-0047　東京都渋谷区神山町 5-5<br>'
         + 'Tel:03-5453-8458　Fax:03-5453-3485'
         + '</div>'

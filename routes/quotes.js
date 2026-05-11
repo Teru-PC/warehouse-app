@@ -8,6 +8,24 @@ const priceMaster = require("../data/price-master.json");
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// 機材価格マスタ（名前→{id, unitPrice, unit}）
+const equipPriceMap = Object.fromEntries(
+  priceMaster.equipment.map(item => [item.name, { id: item.id, unitPrice: item.unitPrice, unit: item.unit }])
+);
+
+function preprocessEmail(text) {
+  let t = text;
+  t = t.replace(/<[^>]+>/g, ' ');
+  t = t.split('\n').filter(line => !line.trimStart().startsWith('>')).join('\n');
+  t = t.replace(/-----\s*Original Message\s*-----[\s\S]*/i, '');
+  t = t.replace(/\n--\s*\n[\s\S]*/m, '');
+  t = t.replace(/\n-{3,}\s*\n[\s\S]*/m, '');
+  t = t.replace(/[\w.+-]+@[\w-]+\.[a-zA-Z.]{2,}/g, '');
+  t = t.replace(/(?:\+81|0)\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4}/g, '');
+  t = t.replace(/\n{3,}/g, '\n\n');
+  return t.trim();
+}
+
 // テーブルが存在しない場合は作成
 pool.query(`
   CREATE TABLE IF NOT EXISTS quotes (
@@ -35,140 +53,113 @@ router.post("/analyze", auth, async (req, res) => {
       return res.status(500).json({ message: "GROQ_API_KEY is not configured" });
     }
 
-    const prompt = `
-あなたは通訳・映像機材レンタル会社の見積書作成アシスタントです。
-以下のメール本文を解析し、見積書に必要な情報をJSON形式で抽出してください。
+    const processedEmail = preprocessEmail(emailText);
 
-【価格マスタ】
-${JSON.stringify(priceMaster, null, 2)}
+    const equipNames = priceMaster.equipment.map(e => e.name).join('/');
+
+    const prompt = `あなたは通訳・機材レンタル会社の見積作成AIです。メール本文を解析してJSONのみ返してください。
+
+【機材品目名】${equipNames}
+
+【分類ルール】
+- interpretationItems: 同時通訳料（半日or1日）・通訳音声二次使用料のみ
+- equipmentItems: 機器・エンジニア・設営・運搬費等
+- 延長料・移動拘束費・日当・管理費はシステム自動計算のため含めない
+- 重複禁止: 同じ品目をinterpretationItemsとequipmentItemsの両方に含めない
+
+【通訳料（重要）】通訳の依頼がある場合は必ずinterpretationItemsに同時通訳料を1行含める
+- workingHours>0かつ≤4 → name:「同時通訳料（半日）」 英語:62000円/他言語:65000円
+- それ以外（>4または不明） → name:「同時通訳料（1日）」 英語:95000円/他言語:99000円
+- quantity=通訳者数, unit="名"
+
+【顧客名（customerName）】会社名・機関名のみを抽出する。個人名・部署名・役職名は含めない。
+- 「株式会社グラポンの増野と申します」→「株式会社グラポン」
+- 「キユーピー株式会社 人事本部の富山」→「キユーピー株式会社」
+- 「内閣府の比嘉でございます」→「内閣府」
+- 会社名が不明な場合はnull
+
+【type判定】
+- 通訳のみ → "interpretation"、機材のみ → "equipment"、両方 → "both"、英語メール → "english"
+
+【FM受信機統一】受信機・レシーバー・イヤホン（同通用）→ 品目名「FM無線受信機」に統一し重複させない
+
+【時間計算】
+- workingHours: 開始〜終了時刻から計算（不明=0）
+- interpretationType: ≤4h→halfDay / ≤8h→fullDay / >8h→fullDayWithOvertime（不明=fullDay）
+- overtimeUnits: >8hならceil((h-8)/0.5)、他は0
+
+【出張判定】
+- outsideTokyo: 100km超・新幹線・飛行機必要→true（大阪・名古屋・福岡・札幌・沖縄・広島・仙台等）
+- travelPattern: none/dayTrip/sameDay/preDay（前日入り明記または遠方ならpreDay）
+
+【出力JSON形式】
+{"type":"both","customerName":"株式会社XXX","projectName":"国際会議","eventDate":"2025年6月1日","startTime":"10:00","endTime":"17:00","location":"東京","outsideTokyo":false,"requiresStay":false,"preDayEntry":false,"workingHours":7,"interpretationType":"fullDay","overtimeUnits":0,"travelPattern":"none","transportRoute":null,"interpreters":2,"languages":["日本語-英語"],"languageCount":1,"numDays":1,"interpretationItems":[{"id":null,"name":"同時通訳料（1日）","quantity":2,"unitPrice":95000,"unit":"名","subtotal":190000}],"equipmentItems":[{"id":null,"name":"FM無線受信機","quantity":50,"unitPrice":1000,"unit":"台","subtotal":50000}],"discount":0,"totalAmount":0,"notes":null}
+
+必ずJSONのみを返してください。説明文・コードブロック・マークダウンは一切含めないでください。最初の文字は{、最後の文字は}にしてください。
 
 【メール本文】
-${emailText}
-
-【項目分類ルール（重要）】
-■ interpretationItems（通訳見積書）に含める項目：
-- 同時通訳料（workingHoursに基づき品目名・単価を以下で設定）：
-  - workingHours ≤ 4 かつ > 0 → 品目名「同時通訳料（半日）」 単価：英語62,000円／その他65,000円
-  - workingHours > 4 または = 0（不明） → 品目名「同時通訳料（1日）」 単価：英語95,000円／その他99,000円
-  ※8時間超の場合も品目名は「同時通訳料（1日）」のまま（延長料はシステムが自動追加するため含めない）
-- 通訳音声二次使用料（依頼がある場合のみ）
-※延長料・移動拘束費・日当・管理費はシステムが自動計算するため含めない
-
-■ equipmentItems（機材見積書）に含める項目：
-- 同時通訳機器類（通訳ユニット・ブース・受信機・送信機など）
-- 音響機器（ミキサー・マイク・スピーカーなど）
-- 映像機器（カメラ・モニターなど）
-- オンライン機器（PC・インターフェースなど）
-- エンジニア・技術者費用
-- 設営・撤去費
-- 運搬費
-
-■ FM無線受信機の表記統一（重要）：
-  メールに以下の表記が含まれていた場合は、すべて equipmentItems の「FM無線受信機」として出力すること：
-  - 「受信機」「レシーバー」「同通レシーバー」「同時通訳レシーバー」「FMレシーバー」「FM受信機」
-  - 「イヤホン」（同時通訳用として記載されている場合）
-  ルール：
-  - 品目名は必ず「FM無線受信機」に統一する（別の名前では出力しない）
-  - 単価は価格マスタの「FM無線受信機」の単価（1,000円）を使用する
-  - 台数はメールに記載の数量をそのまま使用する。記載がない場合は 1 とする
-  - 上記表記が複数あっても「FM無線受信機」として1行にまとめ、重複して出力しない
-
-■ 絶対に重複させない：同じ項目がinterpretationItemsとequipmentItemsの両方に入らないこと。
-  通訳ブース・受信機などは必ずequipmentItemsのみ。
-  通訳料は必ずinterpretationItemsのみ。
-
-【出張判定ルール】
-- 渋谷から100km以上 OR 新幹線・飛行機が必要な場合 → outsideTokyo: true
-- 東京都内・神奈川・埼玉・千葉などの近郊 → outsideTokyo: false
-- 大阪・名古屋・福岡・沖縄・札幌・広島・仙台などの遠方 → outsideTokyo: true
-
-【travelPattern の判定】
-- "none"     : 出張なし（outsideTokyo: false）または移動情報が不明
-- "dayTrip"  : 当日移動・当日帰宅の日帰り出張
-- "sameDay"  : 当日移動・宿泊あり・翌日帰京
-- "preDay"   : 前日入り・宿泊あり（前日入り明記、または大阪・福岡・札幌・沖縄など遠方で前日入りが一般的な場合）
-
-【拘束時間と通訳タイプの判定】
-- 開始時刻〜終了時刻が記載されていれば workingHours を算出（小数可、例: 9.5）
-- 不明な場合は 0
-- workingHours に基づき interpretationType を判定：
-  - workingHours > 0 かつ ≤ 4 → "halfDay"
-  - workingHours > 4 かつ ≤ 8 → "fullDay"
-  - workingHours > 8 → "fullDayWithOvertime"
-  - workingHours = 0（不明）→ "fullDay"（デフォルト）
-- overtimeUnits：workingHours > 8 の場合 ceil((workingHours − 8) / 0.5) の整数値、それ以外は 0
-  例：9時間 → overtimeUnits = 2、8.5時間 → overtimeUnits = 1、10時間 → overtimeUnits = 4
-
-【出力フォーマット（JSONのみ返すこと）】
-{
-  "type": "interpretation" | "equipment" | "both" | "english",
-  "customerName": "顧客名（不明な場合は null）",
-  "projectName": "案件名・イベント名（不明な場合は null）",
-  "eventDate": "日程（例: 2025年3月15日、不明な場合は null）",
-  "startTime": "開始時刻（例：13:00、不明な場合は null）",
-  "endTime": "終了時刻（例：17:00、不明な場合は null）",
-  "location": "開催都市名（例: 大阪、福岡、不明な場合は null）",
-  "outsideTokyo": 出張判定ルールに基づき true / false,
-  "requiresStay": 宿泊が必要な場合は true、日帰りまたは不明は false,
-  "preDayEntry": 前日入りが必要または明記されている場合は true、それ以外は false,
-  "workingHours": 拘束時間（数値、不明な場合は 0）,
-  "interpretationType": "halfDay" | "fullDay" | "fullDayWithOvertime"（拘束時間判定ルールに基づく）,
-  "overtimeUnits": 延長コマ数（整数・30分単位。workingHours > 8 の場合 ceil((workingHours-8)/0.5)、それ以外は 0）,
-  "travelPattern": "none" | "dayTrip" | "sameDay" | "preDay",
-  "transportRoute": "交通手段の経路（例: 羽田空港－那覇空港、東京駅－新大阪駅（新幹線））、不明な場合は null",
-  "interpreters": 通訳者数（数値、不明な場合は 1）,
-  "languages": ["言語ペア（例: 日本語-英語, 日本語-中国語, 日本語-フランス語）（不明な場合は []）"],
-  "languageCount": 言語ペア数（整数。日英のみなら 1、日英と日仏の2言語なら 2。不明な場合は 1）,
-  "numDays": イベント日数（数値、不明な場合は 1）,
-  "interpretationItems": [
-    {
-      "id": "価格マスタのid（不明な場合は null）",
-      "name": "品目名",
-      "quantity": 数量（数値）,
-      "unitPrice": 単価（価格マスタから取得、不明な場合は 0）,
-      "unit": "単位",
-      "subtotal": 小計（quantity × unitPrice）
-    }
-  ],
-  "equipmentItems": [
-    {
-      "id": "価格マスタのid（不明な場合は null）",
-      "name": "品目名",
-      "quantity": 数量（数値）,
-      "unitPrice": 単価（価格マスタから取得、不明な場合は 0）,
-      "unit": "単位",
-      "subtotal": 小計（quantity × unitPrice）
-    }
-  ],
-  "discount": 値引き額（数値、なければ 0）,
-  "totalAmount": 合計金額（数値）,
-  "notes": "その他の備考（不明な場合は null）"
-}
-
-type の判定基準：
-- 通訳のみ → "interpretation"
-- 機材のみ → "equipment"
-- 両方 → "both"
-- 英語メール → "english"
-
-JSONのみ返してください。マークダウンのコードブロックは不要です。
-    `.trim();
+${processedEmail}`.trim();
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }],
     });
 
     const text = completion.choices[0]?.message?.content?.trim() ?? "";
+    console.log('[quotes/analyze] raw response:', text);
 
     let quoteData;
     try {
-      const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-      quoteData = JSON.parse(cleaned);
-    } catch {
+      // コードブロックを除去
+      let cleaned = text
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .trim();
+
+      // JSON部分のみ抽出（{から}まで）
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      // パース試行・失敗時は末尾カンマを除去して再試行
+      try {
+        quoteData = JSON.parse(cleaned);
+      } catch {
+        cleaned = cleaned
+          .replace(/,\s*}/g, '}')
+          .replace(/,\s*]/g, ']');
+        quoteData = JSON.parse(cleaned);
+      }
+    } catch (parseErr) {
+      console.error('[quotes/analyze] parse error:', parseErr.message);
+      console.error('[quotes/analyze] raw text was:', text);
       return res.status(502).json({ message: "Groq response parse error", raw: text });
     }
 
+    // サーバー側で機材価格をprice-masterから照合・補完
+    if (Array.isArray(quoteData.equipmentItems)) {
+      quoteData.equipmentItems = quoteData.equipmentItems.map(item => {
+        const master = equipPriceMap[item.name];
+        if (master) {
+          const unitPrice = master.unitPrice;
+          const quantity  = Number(item.quantity) || 1;
+          return { ...item, id: master.id, unitPrice, unit: master.unit, subtotal: quantity * unitPrice };
+        }
+        return item;
+      });
+    }
+
+    // typeをアイテムの実態に合わせて補正（AIが誤判定した場合の保険）
+    const hasInterp = Array.isArray(quoteData.interpretationItems) && quoteData.interpretationItems.length > 0;
+    const hasEquip  = Array.isArray(quoteData.equipmentItems)       && quoteData.equipmentItems.length > 0;
+    if (hasInterp && hasEquip) {
+      quoteData.type = (quoteData.type === 'english') ? 'english' : 'both';
+    } else if (hasInterp) {
+      if (quoteData.type !== 'english') quoteData.type = 'interpretation';
+    } else if (hasEquip) {
+      quoteData.type = 'equipment';
+    }
+
+    console.log('[quotes/analyze] type:', quoteData.type, 'interpretationItems:', JSON.stringify((quoteData.interpretationItems || []).map(i => i.name)), 'equipmentItems:', (quoteData.equipmentItems || []).map(i => i.name));
     console.log('[quotes/analyze] AI response fields:', JSON.stringify({
       interpretationType: quoteData.interpretationType,
       overtimeUnits:      quoteData.overtimeUnits,
